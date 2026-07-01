@@ -1,0 +1,51 @@
+[project]
+name = "jelotia-imposer"
+version = "0.1.0"
+description = "Logiciel Professionnel d'Imposition Automatique Industrielle"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.14.0",
+    "colorama>=0.4.6",
+    "colour-science>=0.4.4",
+    "loguru>=0.7.3",
+    "opencv-python>=4.10.0",
+    "pikepdf>=9.4.2",
+    "pillow>=11.0.0",
+    "pydantic>=2.10.4",
+    "pymupdf>=1.25.1",
+    "pyside6>=6.8.1",
+    "qrcode>=8.0",
+    "rectpack>=0.2.2",
+    "reportlab>=4.2.5",
+    "shapely>=2.0.6",
+    "sqlalchemy>=2.0.36",
+    "watchdog>=6.0.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+
+[tool.black]
+line-length = 100
+target-version = ['py312']
+
+[dependency-groups]
+dev = [
+    "black>=26.5.1",
+    "mypy>=2.1.0",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.15.20",
+]
