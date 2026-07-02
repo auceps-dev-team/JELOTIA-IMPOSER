@@ -1,0 +1,47 @@
+/* dark_theme.qss */
+QMainWindow {
+    background-color: #1e1e2e;
+    color: #cdd6f4;
+}
+
+/* Sidebar Styling */
+#sidebar {
+    background-color: #181825;
+    border-right: 1px solid #313244;
+}
+
+#sidebar QPushButton {
+    background-color: transparent;
+    color: #a6adc8;
+    text-align: left;
+    padding: 12px 20px;
+    border: none;
+    font-size: 14px;
+}
+
+#sidebar QPushButton:hover {
+    background-color: #313244;
+    color: #cdd6f4;
+}
+
+#sidebar QPushButton:checked {
+    background-color: #89b4fa;
+    color: #11111b;
+    font-weight: bold;
+}
+
+/* Stacked Widget (Main Content) */
+QStackedWidget {
+    background-color: #1e1e2e;
+}
+
+/* Status Bar */
+QStatusBar {
+    background-color: #11111b;
+    color: #bac2de;
+    border-top: 1px solid #313244;
+}
+
+QStatusBar::item {
+    border: none;
+}

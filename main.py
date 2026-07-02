@@ -1,28 +1,23 @@
 import sys
+from pathlib import Path
 
-from PySide6.QtWidgets import QApplication, QLabel, QMainWindow, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication
 
 from src.utils.logger import app_logger
-
-
-class MainWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("Jelotia Imposer")
-        self.resize(800, 600)
-
-        layout = QVBoxLayout()
-        label = QLabel("Jelotia Imposer - Initialization Phase")
-        layout.addWidget(label)
-
-        container = QWidget()
-        container.setLayout(layout)
-        self.setCentralWidget(container)
-
+from src.ui.main_window import MainWindow
 
 def main():
     app_logger.info("Starting Jelotia Imposer...")
     app = QApplication(sys.argv)
+    
+    # Load stylesheet
+    qss_path = Path(__file__).parent / "src" / "ui" / "resources" / "dark_theme.qss"
+    if qss_path.exists():
+        with open(qss_path, "r", encoding="utf-8") as f:
+            app.setStyleSheet(f.read())
+    else:
+        app_logger.warning(f"Stylesheet not found at {qss_path}")
+        
     window = MainWindow()
     window.show()
     sys.exit(app.exec())
