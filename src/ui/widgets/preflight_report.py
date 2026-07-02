@@ -111,16 +111,52 @@ class PreflightDialog(QDialog):
         self.btn_ignore.setObjectName("warning")
         self.btn_ignore.clicked.connect(self.accept)
         
+        self.btn_export = QPushButton("Exporter Rapport")
+        self.btn_export.clicked.connect(self.export_report)
+        
         self.btn_cancel = QPushButton("Annuler")
         self.btn_cancel.clicked.connect(self.reject)
         
         btn_layout.addWidget(self.btn_correct_all)
         btn_layout.addStretch()
+        btn_layout.addWidget(self.btn_export)
         btn_layout.addWidget(self.btn_ignore)
         btn_layout.addWidget(self.btn_cancel)
         
         layout.addLayout(btn_layout)
         
+    def export_report(self):
+        from PySide6.QtWidgets import QFileDialog
+        from datetime import datetime
+        
+        save_path, _ = QFileDialog.getSaveFileName(self, "Exporter Rapport Preflight", "", "HTML Files (*.html)")
+        if not save_path:
+            return
+            
+        html_content = f"<html><head><title>Rapport Preflight</title></head><body>"
+        html_content += f"<h1>Rapport d'Analyse (Preflight)</h1>"
+        html_content += f"<p>Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>"
+        
+        for filename, err_list in self.errors.items():
+            html_content += f"<h2>Fichier: {filename}</h2><ul>"
+            for err in err_list:
+                err_type = err.get("type", "Erreur")
+                err_desc = err.get("desc", "")
+                solution = err.get("solution", "")
+                
+                color = "orange" if err_type == "Warning" else "red"
+                html_content += f"<li><b style='color:{color}'>[{err_type}]</b> {err_desc}<br><i>Solution: {solution}</i></li>"
+            html_content += "</ul>"
+            
+        html_content += "</body></html>"
+        
+        try:
+            with open(save_path, "w", encoding="utf-8") as f:
+                f.write(html_content)
+            QMessageBox.information(self, "Succès", f"Rapport exporté vers {save_path}")
+        except Exception as e:
+            QMessageBox.warning(self, "Erreur", f"Erreur lors de l'exportation: {e}")
+
     def populate_tree(self):
         self.tree.clear()
         for filename, err_list in self.errors.items():
