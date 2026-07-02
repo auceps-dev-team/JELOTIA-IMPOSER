@@ -34,6 +34,10 @@ DEFAULT_CONFIG = {
         "scheduled_time": "",  # e.g., "20:00"
         "enable_scheduling": False
     },
+    "output": {
+        "archive_days": 15,
+        "enable_notifications": True
+    },
     "performance": {
         "workers": 4,
         "memory_limit_mb": 4096

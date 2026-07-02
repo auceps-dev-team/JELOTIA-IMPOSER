@@ -6,6 +6,11 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QIcon
 from PySide6.QtCore import Qt
+from pathlib import Path
+from src.ui.widgets.job_queue import JobsWidget
+from src.ui.widgets.settings_view import SettingsWidget
+from src.core.system_notifier import SystemNotifier
+from src.core.output_manager import OutputManager
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -22,9 +27,16 @@ class MainWindow(QMainWindow):
         
         self.setup_sidebar()
         self.setup_stacked_widget()
+        
+        # Load system services
+        self.notifier = SystemNotifier(self)
+        self.output_manager = OutputManager()
+        
+        # Setup UI
         self.setup_status_bar()
         self.setup_system_tray()
         self.setup_hot_folder_monitor()
+        self.recover_orphan_jobs()
         
     def setup_sidebar(self):
         self.sidebar = QFrame()
@@ -180,6 +192,23 @@ class MainWindow(QMainWindow):
         # A job has been grouped and is ready
         self.jobs_view.add_job(group_name, files[0], "Prêt", "0%")
         self.status_bar.showMessage(f"Nouveau job groupé prêt : {group_name} ({len(files)} fichiers)")
+        self.notifier.notify("Nouveau Job", f"Le job {group_name} est prêt.", False)
+
+    def recover_orphan_jobs(self):
+        """Scans the /Processing folder at startup for files that were left behind during a crash"""
+        from pathlib import Path
+        processing_dir = Path(self.output_manager.processing_dir)
+        if processing_dir.exists():
+            for p in processing_dir.iterdir():
+                if p.is_file() and p.suffix.lower() == ".pdf":
+                    self.auto_processor.add_file(str(p))
+                    
+    def simulate_job_completion(self, job_name, files):
+        """Simulate a job finishing successfully"""
+        archive_path = self.output_manager.archive_files(job_name, files)
+        if archive_path:
+            self.notifier.notify("Job Terminé", f"Le job {job_name} a été archivé.", False)
+            self.status_bar.showMessage(f"Job archivé : {job_name}")
 
     def closeEvent(self, event):
         if hasattr(self, 'hf_monitor'):

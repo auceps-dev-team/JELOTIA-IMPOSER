@@ -121,18 +121,26 @@ class SettingsWidget(QWidget):
         layout.addRow("Formats autorisés (séparés par virgule):", self.allowed_formats)
         
     def setup_tab_export(self):
-        tab, layout = self._create_form_tab("Export")
+        tab, layout = self._create_form_tab("Exportation")
         
         self.export_format = self._style_input(QComboBox())
-        self.export_format.addItems(["PDF", "TIFF", "JPEG"])
+        self.export_format.addItems(["PDF/X-4", "PDF (Standard)", "TIFF", "JDF"])
         
-        self.export_resolution = self._style_input(QSpinBox())
-        self.export_resolution.setMaximum(2400)
+        self.export_dpi = self._style_input(QSpinBox())
+        self.export_dpi.setRange(72, 2400)
+        self.export_dpi.setValue(300)
+        
+        self.archive_days = self._style_input(QSpinBox())
+        self.archive_days.setRange(1, 365)
+        
+        self.enable_notifications = QCheckBox("Activer les notifications système (Windows)")
         
         self.icc_profile = self._style_input(QLineEdit())
         
-        layout.addRow("Format d'export:", self.export_format)
-        layout.addRow("Résolution d'export (DPI):", self.export_resolution)
+        layout.addRow("Format de sortie:", self.export_format)
+        layout.addRow("Résolution (DPI):", self.export_dpi)
+        layout.addRow("Archiver pendant (jours):", self.archive_days)
+        layout.addRow("", self.enable_notifications)
         layout.addRow("Profil ICC:", self.icc_profile)
         
     def setup_tab_users(self):
@@ -229,11 +237,15 @@ class SettingsWidget(QWidget):
         self.allowed_formats.setText(self.config.get("preflight", "allowed_formats") or "")
         
         # Export
-        export_fmt = self.config.get("export", "format")
-        if export_fmt:
-            idx = self.export_format.findText(export_fmt)
+        fmt = self.config.get("export", "format")
+        if fmt:
+            idx = self.export_format.findText(fmt)
             if idx >= 0: self.export_format.setCurrentIndex(idx)
-        self.export_resolution.setValue(self.config.get("export", "resolution") or 300)
+        self.export_dpi.setValue(self.config.get("export", "dpi") or 300)
+        
+        # Output & Archive
+        self.archive_days.setValue(self.config.get("output", "archive_days") or 15)
+        self.enable_notifications.setChecked(self.config.get("output", "enable_notifications") or False)
         self.icc_profile.setText(self.config.get("export", "icc_profile") or "")
         
         # Users
@@ -271,7 +283,11 @@ class SettingsWidget(QWidget):
         
         # Export
         self.config.set("export", "format", self.export_format.currentText())
-        self.config.set("export", "resolution", self.export_resolution.value())
+        self.config.set("export", "dpi", self.export_dpi.value())
+        
+        # Output & Archive
+        self.config.set("output", "archive_days", self.archive_days.value())
+        self.config.set("output", "enable_notifications", self.enable_notifications.isChecked())
         self.config.set("export", "icc_profile", self.icc_profile.text())
         
         # Users
