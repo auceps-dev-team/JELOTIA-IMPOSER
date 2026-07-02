@@ -61,7 +61,7 @@ class MainWindow(QMainWindow):
         # Connect buttons to stacked widget change
         self.btn_dashboard.clicked.connect(lambda: self.switch_view(0, self.btn_dashboard))
         self.btn_jobs.clicked.connect(lambda: self.switch_view(1, self.btn_jobs))
-        self.btn_settings.clicked.connect(lambda: self.switch_view(2, self.btn_settings))
+        self.btn_settings.clicked.connect(lambda: self.switch_view(3, self.btn_settings))
         
     def setup_stacked_widget(self):
         self.stacked_widget = QStackedWidget()
@@ -79,9 +79,9 @@ class MainWindow(QMainWindow):
         from src.ui.widgets.sheet_preview import SheetPreviewWidget
         self.preview_view = SheetPreviewWidget()
         
-        self.settings_view = QLabel("Settings View (Coming soon)")
-        self.settings_view.setAlignment(Qt.AlignCenter)
-        self.settings_view.setStyleSheet("font-size: 24px; color: #a6adc8;")
+        # Settings view
+        from src.ui.widgets.settings_view import SettingsWidget
+        self.settings_view = SettingsWidget()
         
         self.stacked_widget.addWidget(self.dashboard_view)
         self.stacked_widget.addWidget(self.jobs_view)
