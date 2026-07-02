@@ -3,10 +3,10 @@ import logging
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import Callable, List
+from typing import Callable, List, Tuple
 from uuid import UUID
 
-from src.core.models.domain import FileItem, JobSettings
+from src.core.models.domain import FileItem, JobSettings, Sheet
 from src.core.processors.job_processor import process_job_files
 
 logger = logging.getLogger(__name__)
@@ -36,8 +36,10 @@ class WorkerPoolManager:
         self.is_running = False
         self._dispatcher_task = None
 
-        # Callback triggered when a job finishes: (job_id: UUID, items: List[FileItem], error: Exception)
-        self.on_job_completed: Callable[[UUID, List[FileItem], Exception], None] = None
+        # Callback triggered when a job finishes: (job_id: UUID, result: Tuple[List[FileItem], List[Sheet]], error: Exception)
+        self.on_job_completed: Callable[
+            [UUID, Tuple[List[FileItem], List[Sheet]], Exception], None
+        ] = None
 
     def start(self):
         """Starts the background dispatcher loop."""
@@ -104,4 +106,4 @@ class WorkerPoolManager:
         except Exception as e:
             logger.error(f"Job {job_id} failed in worker: {e}")
             if self.on_job_completed:
-                self.on_job_completed(job_id, [], e)
+                self.on_job_completed(job_id, ([], []), e)

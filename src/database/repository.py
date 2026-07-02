@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker, subqueryload
 
-from src.core.models.domain import Job, FileItem
+from src.core.models.domain import FileItem, Job, Sheet
 from src.database.models import Base, FileItemModel, JobModel, SheetModel
 from src.utils.config import config
 
@@ -179,6 +179,35 @@ class DatabaseRepository:
         except SQLAlchemyError as e:
             session.rollback()
             logger.error(f"Error updating files for job {job_id}: {e}")
+            return False
+        finally:
+            session.close()
+
+    def update_job_sheets(self, job_id: str, sheets: List[Sheet]) -> bool:
+        """Update or insert Sheets for a given job."""
+        session = self.get_session()
+        try:
+            # Delete existing sheets for this job to replace them
+            session.query(SheetModel).filter(SheetModel.job_id == job_id).delete()
+
+            for sheet in sheets:
+                db_sheet = SheetModel(
+                    id=str(sheet.id),
+                    job_id=str(job_id),
+                    sheet_number=sheet.sheet_number,
+                    width_mm=sheet.width_mm,
+                    height_mm=sheet.height_mm,
+                    fill_rate=sheet.fill_rate,
+                    export_path=str(sheet.export_path) if sheet.export_path else None,
+                    items=[item.model_dump() for item in sheet.items],
+                )
+                session.add(db_sheet)
+
+            session.commit()
+            return True
+        except SQLAlchemyError as e:
+            session.rollback()
+            logger.error(f"Error updating sheets for job {job_id}: {e}")
             return False
         finally:
             session.close()

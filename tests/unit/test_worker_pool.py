@@ -51,12 +51,17 @@ async def test_worker_pool_dispatch(temp_pdf, mock_job_settings):
 
     # Wait for the callback with a timeout
     try:
-        job_id, items, error = await asyncio.wait_for(callback_called, timeout=5.0)
+        job_id, result, error = await asyncio.wait_for(callback_called, timeout=5.0)
     finally:
         await manager.stop()
 
     assert error is None
     assert job_id == test_job_id
+
+    items, sheets = result
     assert len(items) == 1
     assert items[0].job_id == test_job_id
     assert items[0].path == temp_pdf
+
+    # Check sheets (it should have generated 1 sheet)
+    assert len(sheets) == 1

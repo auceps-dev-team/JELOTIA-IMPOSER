@@ -1,19 +1,20 @@
 import logging
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 from uuid import UUID
 
 from src.core.engines.correction_engine import CorrectionEngine
 from src.core.engines.import_engine import ImportEngine
+from src.core.engines.nesting_engine import NestingEngine, RectpackNestingStrategy
 from src.core.engines.preflight_engine import PreflightEngine
-from src.core.models.domain import FileItem, JobSettings, PreflightStatus
+from src.core.models.domain import FileItem, JobSettings, PreflightStatus, Sheet
 
 logger = logging.getLogger(__name__)
 
 
 def process_job_files(
     job_id: UUID, file_paths: List[Path], settings: JobSettings
-) -> List[FileItem]:
+) -> Tuple[List[FileItem], List[Sheet]]:
     """
     Processes a list of file paths for a single job.
     Executes Import -> Preflight -> Correction sequentially for each file.
@@ -69,4 +70,13 @@ def process_job_files(
             # (Note: ImportEngine already does this, but we wrap just in case)
             pass
 
-    return processed_items
+    # 4. Nesting (Places corrected files on sheets)
+    nesting_engine = NestingEngine(RectpackNestingStrategy(algo_type="maxrects"))
+    sheets = []
+    try:
+        sheets = nesting_engine.process(processed_items, settings)
+    except Exception as e:
+        logger.exception(f"Fatal error during nesting: {e}")
+        # Note: we still return processed_items even if nesting fails
+
+    return processed_items, sheets
