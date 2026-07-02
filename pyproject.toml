@@ -1,6 +1,6 @@
 [project]
 name = "jelotia-imposer"
-version = "0.1.0"
+version = "0.2.0"
 description = "Logiciel Professionnel d'Imposition Automatique Industrielle"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -37,6 +37,7 @@ select = ["E", "F", "I"]
 python_version = "3.12"
 strict = true
 ignore_missing_imports = true
+exclude = ["tests/"]
 
 [tool.black]
 line-length = 100

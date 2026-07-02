@@ -1,11 +1,10 @@
 import sys
+from typing import Any
 
 from loguru import logger
 
 from src.utils.config import config
 
-
-from typing import Any
 
 def setup_logger() -> Any:
     """Configure loguru logger."""

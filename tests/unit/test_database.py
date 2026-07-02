@@ -1,7 +1,7 @@
 import pytest
-import os
+
+from src.core.models.domain import ColorMode, FileFormat, FileItem, Job
 from src.database.repository import DatabaseRepository
-from src.core.models.domain import Job, FileItem, FileFormat, ColorMode
 
 
 @pytest.fixture
@@ -37,8 +37,8 @@ def test_create_and_get_job(repo):
 def test_update_job_status(repo):
     job = Job(name="Status Test Job")
     job_id = repo.create_job(job)
-    
+
     assert repo.update_job_status(job_id, "PROCESSING") is True
-    
+
     db_job = repo.get_job(job_id)
     assert db_job.status == "PROCESSING"

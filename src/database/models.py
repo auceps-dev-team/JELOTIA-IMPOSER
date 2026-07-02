@@ -4,6 +4,7 @@ from datetime import datetime
 from sqlalchemy import JSON, Column, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import DeclarativeBase, relationship
 
+
 class Base(DeclarativeBase):
     pass
 
