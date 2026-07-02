@@ -150,6 +150,7 @@ class MainWindow(QMainWindow):
     def setup_hot_folder_monitor(self):
         from src.utils.config_manager import ConfigManager
         from src.core.hot_folder_monitor import HotFolderMonitor
+        from src.core.auto_processor import AutoProcessor
         from pathlib import Path
         
         config = ConfigManager()
@@ -161,20 +162,28 @@ class MainWindow(QMainWindow):
             
         processing_path = str(Path(input_path).parent / "Processing")
         
+        # Start Auto Processor
+        self.auto_processor = AutoProcessor(self)
+        self.auto_processor.job_grouped.connect(self.handle_grouped_job)
+        self.auto_processor.start()
+        
+        # Start Hot Folder Monitor
         self.hf_monitor = HotFolderMonitor(input_path, processing_path)
-        self.hf_monitor.signals.new_job_ready.connect(self.handle_new_hot_folder_job)
+        self.hf_monitor.signals.new_job_ready.connect(self.handle_new_hot_folder_file)
         self.hf_monitor.start()
         
-    def handle_new_hot_folder_job(self, file_path):
-        from pathlib import Path
-        p = Path(file_path)
-        job_name = p.stem
+    def handle_new_hot_folder_file(self, file_path):
+        # Pass raw file to the auto processor for intelligent grouping
+        self.auto_processor.add_file(file_path)
         
-        # Add to job list directly
-        self.jobs_view.add_job(job_name, file_path, "Nouveau", "0%")
-        self.status_bar.showMessage(f"Nouveau job détecté : {job_name}")
+    def handle_grouped_job(self, group_name, files):
+        # A job has been grouped and is ready
+        self.jobs_view.add_job(group_name, files[0], "Prêt", "0%")
+        self.status_bar.showMessage(f"Nouveau job groupé prêt : {group_name} ({len(files)} fichiers)")
 
     def closeEvent(self, event):
         if hasattr(self, 'hf_monitor'):
             self.hf_monitor.stop()
+        if hasattr(self, 'auto_processor'):
+            self.auto_processor.stop()
         super().closeEvent(event)

@@ -146,6 +146,13 @@ class JobsWidget(QWidget):
         btn_action.clicked.connect(lambda: self.view_details_requested.emit(name))
         self.table.setCellWidget(row, 5, btn_action)
         
+    def add_job(self, name, file_path, status, progress="0%"):
+        # For simplicity, we just use add_mock_job to inject it into the table.
+        # Ideally we'd store the file_path in a hidden column or data model.
+        import datetime
+        date_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        self.add_mock_job(name, status, 1, 0, date_str)
+        
     def open_new_job_dialog(self, files=None):
         dialog = JobDialog(self, files)
         if dialog.exec():

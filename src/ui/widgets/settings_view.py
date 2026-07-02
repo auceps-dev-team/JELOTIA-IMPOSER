@@ -53,6 +53,7 @@ class SettingsWidget(QWidget):
         self.setup_tab_preflight()
         self.setup_tab_export()
         self.setup_tab_users()
+        self.setup_tab_automation()
         self.setup_tab_performance()
         
         self.main_layout.addWidget(self.tabs)
@@ -142,6 +143,24 @@ class SettingsWidget(QWidget):
         
         layout.addRow("Rôle actif:", self.user_role)
         
+    def setup_tab_automation(self):
+        tab, layout = self._create_form_tab("Automatisation")
+        
+        self.group_delay = self._style_input(QSpinBox())
+        self.group_delay.setMaximum(1440)
+        
+        self.max_files = self._style_input(QSpinBox())
+        self.max_files.setMaximum(1000)
+        
+        self.enable_scheduling = QCheckBox("Activer le déclenchement planifié")
+        self.scheduled_time = self._style_input(QLineEdit())
+        self.scheduled_time.setPlaceholderText("ex: 20:00")
+        
+        layout.addRow("Délai de regroupement (min):", self.group_delay)
+        layout.addRow("Limite de fichiers par Job:", self.max_files)
+        layout.addRow("", self.enable_scheduling)
+        layout.addRow("Heure de déclenchement:", self.scheduled_time)
+
     def setup_tab_performance(self):
         tab, layout = self._create_form_tab("Performance")
         
@@ -223,6 +242,12 @@ class SettingsWidget(QWidget):
             idx = self.user_role.findText(role)
             if idx >= 0: self.user_role.setCurrentIndex(idx)
             
+        # Automation
+        self.group_delay.setValue(self.config.get("automation", "group_delay_minutes") or 5)
+        self.max_files.setValue(self.config.get("automation", "max_files_per_job") or 50)
+        self.enable_scheduling.setChecked(self.config.get("automation", "enable_scheduling") or False)
+        self.scheduled_time.setText(self.config.get("automation", "scheduled_time") or "")
+
         # Performance
         self.workers.setValue(self.config.get("performance", "workers") or 4)
         self.memory_limit.setValue(self.config.get("performance", "memory_limit_mb") or 4096)
@@ -252,6 +277,12 @@ class SettingsWidget(QWidget):
         # Users
         self.config.set("users", "role", self.user_role.currentText())
         
+        # Automation
+        self.config.set("automation", "group_delay_minutes", self.group_delay.value())
+        self.config.set("automation", "max_files_per_job", self.max_files.value())
+        self.config.set("automation", "enable_scheduling", self.enable_scheduling.isChecked())
+        self.config.set("automation", "scheduled_time", self.scheduled_time.text())
+
         # Performance
         self.config.set("performance", "workers", self.workers.value())
         self.config.set("performance", "memory_limit_mb", self.memory_limit.value())

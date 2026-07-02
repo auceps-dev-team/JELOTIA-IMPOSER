@@ -28,6 +28,12 @@ DEFAULT_CONFIG = {
     "users": {
         "role": "Admin"
     },
+    "automation": {
+        "group_delay_minutes": 5,
+        "max_files_per_job": 50,
+        "scheduled_time": "",  # e.g., "20:00"
+        "enable_scheduling": False
+    },
     "performance": {
         "workers": 4,
         "memory_limit_mb": 4096
