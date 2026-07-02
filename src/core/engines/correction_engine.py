@@ -111,14 +111,18 @@ class CorrectionEngine:
             new_size = (int(img.width * scale_factor), int(img.height * scale_factor))
             img = img.resize(new_size, resample=Image.Resampling.LANCZOS)
             file_item.dpi = self.settings.min_dpi
-            
+
         # Add Bleed if required
         if self.settings.add_bleed_mm > 0:
             bleed_px = int((self.settings.add_bleed_mm / 25.4) * file_item.dpi)
             new_width = img.width + 2 * bleed_px
             new_height = img.height + 2 * bleed_px
             # Create a new image with white background (or CMYK white)
-            bleed_bg = Image.new(img.mode, (new_width, new_height), color=(255, 255, 255) if img.mode == "RGB" else (0, 0, 0, 0))
+            bleed_bg = Image.new(
+                img.mode,
+                (new_width, new_height),
+                color=(255, 255, 255) if img.mode == "RGB" else (0, 0, 0, 0),
+            )
             bleed_bg.paste(img, (bleed_px, bleed_px))
             img = bleed_bg
             # Update FileItem dimensions
@@ -151,18 +155,18 @@ class CorrectionEngine:
         # Calculate dimensions in points (1/72 inch)
         width_pt = (pix.width / target_dpi) * 72
         height_pt = (pix.height / target_dpi) * 72
-        
+
         bleed_pt = 0.0
         if self.settings.add_bleed_mm > 0:
             bleed_pt = (self.settings.add_bleed_mm / 25.4) * 72
             file_item.width_mm += 2 * self.settings.add_bleed_mm
             file_item.height_mm += 2 * self.settings.add_bleed_mm
-            
+
         new_width_pt = width_pt + 2 * bleed_pt
         new_height_pt = height_pt + 2 * bleed_pt
-        
+
         rect = fitz.Rect(bleed_pt, bleed_pt, bleed_pt + width_pt, bleed_pt + height_pt)
-        
+
         new_page = new_doc.new_page(width=new_width_pt, height=new_height_pt)
         new_page.insert_image(rect, pixmap=pix)
 

@@ -1,6 +1,6 @@
 [project]
 name = "jelotia-imposer"
-version = "0.2.0"
+version = "0.3.0"
 description = "Logiciel Professionnel d'Imposition Automatique Industrielle"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -47,6 +47,7 @@ target-version = ['py312']
 dev = [
     "black>=26.5.1",
     "mypy>=2.1.0",
+    "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "ruff>=0.15.20",
 ]

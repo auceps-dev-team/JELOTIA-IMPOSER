@@ -131,3 +131,54 @@ class DatabaseRepository:
             return False
         finally:
             session.close()
+
+    def recover_processing_jobs(self) -> int:
+        """Reset any PROCESSING jobs to PENDING (crash recovery)."""
+        session = self.get_session()
+        try:
+            jobs = session.query(JobModel).filter(JobModel.status == "PROCESSING").all()
+            count = len(jobs)
+            for job in jobs:
+                job.status = "PENDING"
+            session.commit()
+            if count > 0:
+                logger.info(f"Recovered {count} jobs from PROCESSING to PENDING")
+            return count
+        except SQLAlchemyError as e:
+            session.rollback()
+            logger.error(f"Error recovering jobs: {e}")
+            return 0
+        finally:
+            session.close()
+
+    def update_job_files(self, job_id: str, files: List[FileItem]) -> bool:
+        """Update or insert FileItems for a given job."""
+        session = self.get_session()
+        try:
+            # Delete existing files for this job to replace them with the processed ones
+            session.query(FileItemModel).filter(FileItemModel.job_id == job_id).delete()
+
+            for file in files:
+                db_file = FileItemModel(
+                    id=str(file.id),
+                    job_id=str(job_id),
+                    path=str(file.path),
+                    format=file.format.value,
+                    width_mm=file.width_mm,
+                    height_mm=file.height_mm,
+                    dpi=file.dpi,
+                    color_mode=file.color_mode.value,
+                    quantity=file.quantity,
+                    preflight_status=file.preflight_status.value,
+                    preflight_errors=[err.model_dump() for err in file.preflight_errors],
+                )
+                session.add(db_file)
+
+            session.commit()
+            return True
+        except SQLAlchemyError as e:
+            session.rollback()
+            logger.error(f"Error updating files for job {job_id}: {e}")
+            return False
+        finally:
+            session.close()
