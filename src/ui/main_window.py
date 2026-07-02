@@ -24,6 +24,7 @@ class MainWindow(QMainWindow):
         self.setup_stacked_widget()
         self.setup_status_bar()
         self.setup_system_tray()
+        self.setup_hot_folder_monitor()
         
     def setup_sidebar(self):
         self.sidebar = QFrame()
@@ -145,3 +146,35 @@ class MainWindow(QMainWindow):
     def tray_activated(self, reason):
         if reason == QSystemTrayIcon.DoubleClick:
             self.showNormal()
+
+    def setup_hot_folder_monitor(self):
+        from src.utils.config_manager import ConfigManager
+        from src.core.hot_folder_monitor import HotFolderMonitor
+        from pathlib import Path
+        
+        config = ConfigManager()
+        input_path = config.get("paths", "input")
+        
+        if not input_path:
+            # Fallback default
+            input_path = str(Path.home() / "Jelotia" / "HotFolder" / "Input")
+            
+        processing_path = str(Path(input_path).parent / "Processing")
+        
+        self.hf_monitor = HotFolderMonitor(input_path, processing_path)
+        self.hf_monitor.signals.new_job_ready.connect(self.handle_new_hot_folder_job)
+        self.hf_monitor.start()
+        
+    def handle_new_hot_folder_job(self, file_path):
+        from pathlib import Path
+        p = Path(file_path)
+        job_name = p.stem
+        
+        # Add to job list directly
+        self.jobs_view.add_job(job_name, file_path, "Nouveau", "0%")
+        self.status_bar.showMessage(f"Nouveau job détecté : {job_name}")
+
+    def closeEvent(self, event):
+        if hasattr(self, 'hf_monitor'):
+            self.hf_monitor.stop()
+        super().closeEvent(event)
