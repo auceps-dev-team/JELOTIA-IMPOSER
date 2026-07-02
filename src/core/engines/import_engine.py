@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List
+from typing import List, Union
 from uuid import UUID
 
 import fitz
@@ -19,11 +19,14 @@ from src.core.models.domain import (
 class ImportEngine:
     """Handles parsing input files and extracting metadata into FileItems."""
 
-    def process_file(self, job_id: UUID, file_path: Path, min_dpi: int = 300) -> List[FileItem]:
+    def process_file(
+        self, job_id: UUID, file_path: Union[str, Path], min_dpi: int = 300
+    ) -> List[FileItem]:
         """
         Detects file type and processes it into one or multiple FileItems.
         Multi-page PDFs return multiple items.
         """
+        file_path = Path(file_path)
         if not file_path.exists():
             logger.error(f"File not found: {file_path}")
             return self._create_corrupted_item(job_id, file_path, "File not found")
