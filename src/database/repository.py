@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker, subqueryload
 
-from src.core.models.domain import Job
+from src.core.models.domain import Job, FileItem
 from src.database.models import Base, FileItemModel, JobModel, SheetModel
 from src.utils.config import config
 
