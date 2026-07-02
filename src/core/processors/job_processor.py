@@ -79,4 +79,15 @@ def process_job_files(
         logger.exception(f"Fatal error during nesting: {e}")
         # Note: we still return processed_items even if nesting fails
 
+    # 5. Layout (Generates PDF for sheets)
+    if sheets:
+        from src.core.engines.layout_engine import LayoutEngine
+        layout_engine = LayoutEngine()
+        try:
+            # We use output_dir from config for final PDFs
+            job_output_dir = config.output_dir / str(job_id)
+            sheets = layout_engine.process_job_layout(job_id, sheets, settings, job_output_dir)
+        except Exception as e:
+            logger.exception(f"Fatal error during layout generation: {e}")
+
     return processed_items, sheets

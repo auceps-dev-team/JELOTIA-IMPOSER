@@ -129,6 +129,7 @@ class RectpackNestingStrategy(NestingStrategy):
 
                 placed_item = PlacedItem(
                     file_item_id=file_item.id,
+                    source_path=file_item.path,
                     x_mm=rect.x,
                     y_mm=rect.y,
                     width_mm=actual_w,

@@ -62,9 +62,11 @@ class JobSettings(BaseModel):
     min_dpi: int = 300
     force_cmyk: bool = True
 
-    # Export
+    # Export Settings
     export_format: str = "PDF/X-1a"
     export_dpi: int = 300
+    draw_cutlines: bool = True
+    add_crop_marks: bool = True
 
 
 class FileItem(BaseModel):
@@ -83,6 +85,7 @@ class FileItem(BaseModel):
 
 class PlacedItem(BaseModel):
     file_item_id: UUID
+    source_path: Path
     x_mm: float
     y_mm: float
     width_mm: float
