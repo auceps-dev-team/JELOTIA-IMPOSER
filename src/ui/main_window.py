@@ -71,10 +71,9 @@ class MainWindow(QMainWindow):
         from src.ui.widgets.dashboard import DashboardWidget
         self.dashboard_view = DashboardWidget()
         
-        # Placeholder views for other sections
-        self.jobs_view = QLabel("Jobs View (Coming soon)")
-        self.jobs_view.setAlignment(Qt.AlignCenter)
-        self.jobs_view.setStyleSheet("font-size: 24px; color: #a6adc8;")
+        # Jobs view
+        from src.ui.widgets.job_queue import JobsWidget
+        self.jobs_view = JobsWidget()
         
         self.settings_view = QLabel("Settings View (Coming soon)")
         self.settings_view.setAlignment(Qt.AlignCenter)
