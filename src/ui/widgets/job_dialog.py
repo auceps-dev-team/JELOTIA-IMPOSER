@@ -99,6 +99,38 @@ class JobDialog(QDialog):
         if not self.name_input.text().strip():
             QMessageBox.warning(self, "Erreur", "Veuillez entrer un nom de job valide.")
             return
+            
+        if not self.initial_files:
+            # Let it pass if empty, just for testing, or we can warn
+            pass
+            
+        # Simulate Preflight check
+        # Let's say if a file has "error" in its name or we just mock some errors
+        has_warnings = len(self.initial_files) > 0  # for demo: always show warning if there are files
+        
+        if has_warnings:
+            mock_errors = {}
+            for f in self.initial_files:
+                fname = Path(f).name
+                mock_errors[fname] = [
+                    {
+                        "type": "Warning", 
+                        "desc": "Marges blanches détectées autour du contenu.",
+                        "solution": "Rogner automatiquement les marges selon le contour du contenu visuel."
+                    },
+                    {
+                        "type": "Erreur",
+                        "desc": "Résolution détectée : 72 DPI (Minimum: 300 DPI)",
+                        "solution": "Avertissement critique : impression potentiellement floue."
+                    }
+                ]
+            
+            from src.ui.widgets.preflight_report import PreflightDialog
+            dialog = PreflightDialog(self, mock_errors)
+            if dialog.exec() == QDialog.Rejected:
+                # User cancelled job creation
+                return
+                
         self.accept()
         
     def get_job_data(self):
