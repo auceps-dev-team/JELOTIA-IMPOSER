@@ -75,13 +75,33 @@ class MainWindow(QMainWindow):
         from src.ui.widgets.job_queue import JobsWidget
         self.jobs_view = JobsWidget()
         
+        # Sheet Preview view
+        from src.ui.widgets.sheet_preview import SheetPreviewWidget
+        self.preview_view = SheetPreviewWidget()
+        
         self.settings_view = QLabel("Settings View (Coming soon)")
         self.settings_view.setAlignment(Qt.AlignCenter)
         self.settings_view.setStyleSheet("font-size: 24px; color: #a6adc8;")
         
         self.stacked_widget.addWidget(self.dashboard_view)
         self.stacked_widget.addWidget(self.jobs_view)
+        self.stacked_widget.addWidget(self.preview_view)
         self.stacked_widget.addWidget(self.settings_view)
+        
+        # Connections
+        self.jobs_view.view_details_requested.connect(self.show_preview)
+        
+    def show_preview(self, job_name):
+        # We switch to preview view.
+        # Ideally, we pass the real generated PDF path. For now we pass a dummy path or nothing.
+        # We can add a back button to the preview in a real scenario, but for now we'll just switch the view.
+        self.stacked_widget.setCurrentWidget(self.preview_view)
+        # Assuming we have a test PDF to show if it exists
+        test_pdf = Path("test_planche.pdf")
+        if test_pdf.exists():
+            self.preview_view.load_pdf(str(test_pdf), fill_rate=85.4)
+        else:
+            self.preview_view.info_label.setText(f"Aperçu pour le job {job_name} - PDF non trouvé")
         
     def switch_view(self, index, button):
         self.stacked_widget.setCurrentIndex(index)

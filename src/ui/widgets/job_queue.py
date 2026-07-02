@@ -3,11 +3,13 @@ from PySide6.QtWidgets import (
     QLineEdit, QPushButton, QTableWidget, QTableWidgetItem,
     QHeaderView, QComboBox, QFrame, QMessageBox
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from src.ui.widgets.job_dialog import JobDialog
 
 class JobsWidget(QWidget):
+    view_details_requested = Signal(str) # Emits job name
+    
     def __init__(self):
         super().__init__()
         self.setAcceptDrops(True) # Enable Drag & Drop
@@ -141,6 +143,7 @@ class JobsWidget(QWidget):
         # Action button placeholder
         btn_action = QPushButton("Détails")
         btn_action.setStyleSheet("background-color: #313244; padding: 4px; border-radius: 2px;")
+        btn_action.clicked.connect(lambda: self.view_details_requested.emit(name))
         self.table.setCellWidget(row, 5, btn_action)
         
     def open_new_job_dialog(self, files=None):
