@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
     QLineEdit, QPushButton, QListWidget, QFormLayout,
-    QComboBox, QSpinBox, QDialogButtonBox, QMessageBox
+    QComboBox, QSpinBox, QDialogButtonBox, QMessageBox, QFileDialog
 )
 from PySide6.QtCore import Qt
 from pathlib import Path
@@ -12,36 +12,7 @@ class JobDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Création de Nouveau Job")
         self.resize(500, 400)
-        self.setStyleSheet("""
-            QDialog {
-                background-color: #1e1e2e;
-                color: #cdd6f4;
-            }
-            QLabel { color: #cdd6f4; }
-            QLineEdit, QComboBox, QSpinBox, QListWidget {
-                background-color: #181825;
-                color: #cdd6f4;
-                border: 1px solid #313244;
-                padding: 5px;
-                border-radius: 4px;
-            }
-            QPushButton {
-                background-color: #313244;
-                color: #cdd6f4;
-                padding: 8px 15px;
-                border-radius: 4px;
-                border: none;
-            }
-            QPushButton:hover { background-color: #45475a; }
-            QPushButton#primary {
-                background-color: #89b4fa;
-                color: #11111b;
-                font-weight: bold;
-            }
-            QPushButton#primary:hover { background-color: #b4befe; }
-        """)
-        
-        self.initial_files = files or []
+        self.initial_files = list(files or [])
         self.setup_ui()
         
     def setup_ui(self):
@@ -92,8 +63,17 @@ class JobDialog(QDialog):
         layout.addLayout(btn_layout)
         
     def add_files(self):
-        # In a real scenario, open QFileDialog
-        QMessageBox.information(self, "Info", "Sélection de fichiers (Simulation)")
+        file_paths, _ = QFileDialog.getOpenFileNames(
+            self,
+            "Sélectionner des fichiers",
+            "",
+            "Fichiers supportés (*.pdf *.tiff *.tif *.png *.jpg *.jpeg);;PDF (*.pdf);;Images (*.tiff *.tif *.png *.jpg *.jpeg);;Tous (*.*)"
+        )
+        if file_paths:
+            for fp in file_paths:
+                if fp not in self.initial_files:
+                    self.initial_files.append(fp)
+                    self.files_list.addItem(Path(fp).name)
         
     def validate_and_accept(self):
         if not self.name_input.text().strip():

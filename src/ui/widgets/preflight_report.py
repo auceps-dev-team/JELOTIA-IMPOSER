@@ -27,7 +27,7 @@ class PreflightDialog(QDialog):
         layout.addWidget(title)
         
         # Splitter for Tree and Details
-        splitter = QSplitter(Qt.Horizontal)
+        splitter = QSplitter(Qt.Orientation.Horizontal)
         
         # Tree View
         self.tree = QTreeWidget()
@@ -117,7 +117,6 @@ class PreflightDialog(QDialog):
         self.tree.clear()
         for filename, err_list in self.errors.items():
             parent_item = QTreeWidgetItem(self.tree, [filename, "Fichier"])
-            parent_item.setFlags(parent_item.flags() | Qt.ItemIsExpanded)
             
             for err in err_list:
                 err_type = err.get("type", "Erreur")
@@ -125,13 +124,13 @@ class PreflightDialog(QDialog):
                 
                 child = QTreeWidgetItem(parent_item, [err_desc, err_type])
                 # Store full description in the item for retrieval
-                child.setData(0, Qt.UserRole, err)
+                child.setData(0, Qt.ItemDataRole.UserRole, err)
                 
                 # Visual indicator
                 if err_type == "Warning":
-                    child.setForeground(0, Qt.yellow)
+                    child.setForeground(0, Qt.GlobalColor.yellow)
                 else:
-                    child.setForeground(0, Qt.red)
+                    child.setForeground(0, Qt.GlobalColor.red)
                     
             parent_item.setExpanded(True)
             
@@ -143,7 +142,7 @@ class PreflightDialog(QDialog):
             return
             
         item = selected[0]
-        err_data = item.data(0, Qt.UserRole)
+        err_data = item.data(0, Qt.ItemDataRole.UserRole)
         
         if err_data:
             # It's an error node
