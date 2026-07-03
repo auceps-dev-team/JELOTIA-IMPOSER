@@ -11,15 +11,15 @@ from pathlib import Path
 class ZoomableView(QGraphicsView):
     def __init__(self, scene, parent=None):
         super().__init__(scene, parent)
-        self.setRenderHint(QPainter.Antialiasing)
-        self.setRenderHint(QPainter.SmoothPixmapTransform)
-        self.setDragMode(QGraphicsView.ScrollHandDrag)
-        self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
-        self.setResizeAnchor(QGraphicsView.AnchorUnderMouse)
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.setBackgroundBrush(Qt.darkGray)
-        self.setFrameShape(QFrame.NoFrame)
+        self.setRenderHint(QPainter.RenderHint.Antialiasing)
+        self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setBackgroundBrush(Qt.GlobalColor.darkGray)
+        self.setFrameShape(QFrame.Shape.NoFrame)
         
         self._zoom = 0
         
@@ -40,7 +40,7 @@ class ZoomableView(QGraphicsView):
         
     def fit_in_view(self):
         self._zoom = 0
-        self.fitInView(self.sceneRect(), Qt.KeepAspectRatio)
+        self.fitInView(self.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
 
 class SheetPreviewWidget(QWidget):
     def __init__(self, parent=None):
@@ -53,14 +53,14 @@ class SheetPreviewWidget(QWidget):
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.main_layout.setSpacing(0)
         
-        # Toolbar
-        self.setup_toolbar()
-        
-        # View area
+        # View area (must be created before toolbar so buttons can reference self.view)
         self.scene = QGraphicsScene(self)
         self.view = ZoomableView(self.scene)
         self.pixmap_item = QGraphicsPixmapItem()
         self.scene.addItem(self.pixmap_item)
+        
+        # Toolbar
+        self.setup_toolbar()
         
         self.main_layout.addWidget(self.view)
         
@@ -69,7 +69,7 @@ class SheetPreviewWidget(QWidget):
         self.toolbar_layout.setContentsMargins(10, 10, 10, 10)
         
         self.info_label = QLabel("Aucun aperçu")
-        self.info_label.setStyleSheet("color: #cdd6f4; font-weight: bold;")
+        self.info_label.setStyleSheet("font-weight: bold;")
         
         self.btn_zoom_in = QPushButton("+")
         self.btn_zoom_out = QPushButton("-")
@@ -77,15 +77,7 @@ class SheetPreviewWidget(QWidget):
         self.btn_export = QPushButton("Exporter PDF")
         
         for btn in [self.btn_zoom_in, self.btn_zoom_out, self.btn_fit, self.btn_export]:
-            btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #313244;
-                    color: #cdd6f4;
-                    padding: 5px 10px;
-                    border-radius: 4px;
-                }
-                QPushButton:hover { background-color: #45475a; }
-            """)
+            pass # Inherit global QSS
             
         self.btn_zoom_in.clicked.connect(lambda: self.view.scale(1.25, 1.25))
         self.btn_zoom_out.clicked.connect(lambda: self.view.scale(0.8, 0.8))
@@ -102,7 +94,6 @@ class SheetPreviewWidget(QWidget):
         # Overlay wrapper
         self.toolbar_widget = QWidget()
         self.toolbar_widget.setLayout(self.toolbar_layout)
-        self.toolbar_widget.setStyleSheet("background-color: #181825;")
         self.main_layout.addWidget(self.toolbar_widget)
         
     def load_pdf(self, pdf_path: str, fill_rate: float = 0.0):
@@ -116,7 +107,7 @@ class SheetPreviewWidget(QWidget):
             pix = page.get_pixmap(matrix=zoom_matrix, alpha=False)
             
             # Convert PyMuPDF Pixmap to QImage
-            img = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format_RGB888)
+            img = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format.Format_RGB888)
             qpixmap = QPixmap.fromImage(img)
             
             self.pixmap_item.setPixmap(qpixmap)

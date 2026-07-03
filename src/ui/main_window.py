@@ -35,8 +35,65 @@ class MainWindow(QMainWindow):
         # Setup UI
         self.setup_status_bar()
         self.setup_system_tray()
+        self.setup_worker_pool()
         self.setup_hot_folder_monitor()
         self.recover_orphan_jobs()
+        
+    def setup_worker_pool(self):
+        from src.core.worker_thread import WorkerPoolThread
+        self.worker_thread = WorkerPoolThread(self)
+        self.worker_thread.job_started.connect(self.handle_job_started)
+        self.worker_thread.job_completed.connect(self.handle_job_completed)
+        self.worker_thread.job_failed.connect(self.handle_job_failed)
+        self.worker_thread.start()
+        
+    def handle_job_started(self, job_id: str):
+        # Update UI or table
+        self.status_bar.showMessage(f"Job {job_id} en cours...")
+        self.jobs_view.update_job_status(job_id, "PROCESSING")
+        
+        # Update Dashboard
+        current_active = int(self.dashboard_view.card_active_jobs.value_label.text())
+        self.dashboard_view.card_active_jobs.value_label.setText(str(current_active + 1))
+        
+    def handle_job_completed(self, job_id: str, files: list, sheets: list):
+        self.status_bar.showMessage(f"Job {job_id} terminé avec succès ({len(sheets)} planches).")
+        self.notifier.notify("Job Terminé", f"Le job {job_id} a été traité.", False)
+        self.jobs_view.update_job_status(job_id, "DONE", len(sheets))
+        
+        # Check for preflight errors
+        from src.core.models.domain import PreflightStatus
+        preflight_errors_map = {}
+        for f in files:
+            if f.preflight_status in (PreflightStatus.ERROR, PreflightStatus.WARNING) and f.preflight_errors:
+                # f.preflight_errors is a list of PreflightError objects, we need to convert to dict
+                preflight_errors_map[f.path.name] = [{"type": e.type.value, "desc": str(e.type.value), "solution": "Vérifiez le fichier source."} for e in f.preflight_errors]
+                
+        if preflight_errors_map:
+            from src.ui.widgets.preflight_report import PreflightDialog
+            dialog = PreflightDialog(self, preflight_errors_map)
+            dialog.exec()
+            
+        # Update Dashboard
+        current_active = int(self.dashboard_view.card_active_jobs.value_label.text())
+        if current_active > 0:
+            self.dashboard_view.card_active_jobs.value_label.setText(str(current_active - 1))
+            
+        current_sheets = int(self.dashboard_view.card_sheets.value_label.text())
+        self.dashboard_view.card_sheets.value_label.setText(str(current_sheets + len(sheets)))
+        
+    def handle_job_failed(self, job_id: str, error_msg: str):
+        self.status_bar.showMessage(f"Erreur Job {job_id}.")
+        self.notifier.notify("Erreur Job", f"Le job {job_id} a échoué: {error_msg}", True)
+        self.jobs_view.update_job_status(job_id, "ERROR")
+        
+        # Update Dashboard
+        current_active = int(self.dashboard_view.card_active_jobs.value_label.text())
+        if current_active > 0:
+            self.dashboard_view.card_active_jobs.value_label.setText(str(current_active - 1))
+            
+        current_errors = int(self.dashboard_view.card_errors.value_label.text())
+        self.dashboard_view.card_errors.value_label.setText(str(current_errors + 1))
         
     def setup_sidebar(self):
         self.sidebar = QFrame()
@@ -87,6 +144,8 @@ class MainWindow(QMainWindow):
         # Jobs view
         from src.ui.widgets.job_queue import JobsWidget
         self.jobs_view = JobsWidget()
+        self.jobs_view.cancel_job_requested.connect(self.handle_cancel_job)
+        self.jobs_view.resume_job_requested.connect(self.handle_resume_job)
         
         # Sheet Preview view
         from src.ui.widgets.sheet_preview import SheetPreviewWidget
@@ -190,9 +249,31 @@ class MainWindow(QMainWindow):
         
     def handle_grouped_job(self, group_name, files):
         # A job has been grouped and is ready
-        self.jobs_view.add_job(group_name, files[0], "Prêt", "0%")
+        self.jobs_view.add_job(group_name, files[0], "PENDING", "0%")
         self.status_bar.showMessage(f"Nouveau job groupé prêt : {group_name} ({len(files)} fichiers)")
         self.notifier.notify("Nouveau Job", f"Le job {group_name} est prêt.", False)
+        
+        # Dispatch to WorkerPool
+        import uuid
+        from pathlib import Path
+        from src.core.models.domain import JobSettings
+        
+        job_id = uuid.uuid4()
+        # Create a basic JobSettings for now
+        settings = JobSettings(
+            sheet_width=320,
+            sheet_height=450,
+            spacing=5.0,
+            rotation_allowed=False,
+            min_dpi=300
+        )
+        file_paths = [Path(f) for f in files]
+        
+        # We use group_name as job_id string in our UI so we can track it
+        # However WorkerPoolManager expects a UUID. Let's map UUID to group_name
+        job_id_str = str(job_id)
+        self.jobs_view.job_uuid_map[job_id_str] = group_name
+        self.worker_thread.submit_job(job_id, file_paths, settings)
 
     def recover_orphan_jobs(self):
         """Scans the /Processing folder at startup for files that were left behind during a crash"""
@@ -203,6 +284,14 @@ class MainWindow(QMainWindow):
                 if p.is_file() and p.suffix.lower() == ".pdf":
                     self.auto_processor.add_file(str(p))
                     
+    def handle_cancel_job(self, job_name: str):
+        self.status_bar.showMessage(f"Annulation du job: {job_name}")
+        self.notifier.notify("Job Annulé", f"Le job {job_name} a été annulé.", False)
+
+    def handle_resume_job(self, job_name: str):
+        self.status_bar.showMessage(f"Reprise du job: {job_name}")
+        self.notifier.notify("Job Repris", f"Le job {job_name} a été relancé.", False)
+
     def simulate_job_completion(self, job_name, files):
         """Simulate a job finishing successfully"""
         archive_path = self.output_manager.archive_files(job_name, files)
@@ -215,4 +304,6 @@ class MainWindow(QMainWindow):
             self.hf_monitor.stop()
         if hasattr(self, 'auto_processor'):
             self.auto_processor.stop()
+        if hasattr(self, 'worker_thread'):
+            self.worker_thread.stop()
         super().closeEvent(event)

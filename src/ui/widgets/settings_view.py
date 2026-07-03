@@ -21,30 +21,18 @@ class SettingsWidget(QWidget):
         
         # Title
         title = QLabel("Paramètres de l'Application")
-        title.setStyleSheet("font-size: 24px; font-weight: bold; color: #cdd6f4;")
+        title.setStyleSheet("font-size: 24px; font-weight: bold;")
         self.main_layout.addWidget(title)
         
         # Tabs
         self.tabs = QTabWidget()
         self.tabs.setStyleSheet("""
-            QTabWidget::pane {
-                border: 1px solid #313244;
-                background-color: #181825;
-                border-radius: 4px;
-            }
             QTabBar::tab {
-                background-color: #1e1e2e;
-                color: #a6adc8;
                 padding: 8px 15px;
-                border-top-left-radius: 4px;
-                border-top-right-radius: 4px;
-                border: 1px solid #313244;
-                border-bottom: none;
             }
             QTabBar::tab:selected {
-                background-color: #181825;
-                color: #cdd6f4;
                 font-weight: bold;
+                border-bottom: 2px solid #D97A27;
             }
         """)
         
@@ -72,9 +60,7 @@ class SettingsWidget(QWidget):
         
     def _style_input(self, widget):
         widget.setStyleSheet("""
-            background-color: #11111b;
-            color: #cdd6f4;
-            border: 1px solid #313244;
+            border: 1px solid #D97A27;
             padding: 5px;
             border-radius: 4px;
         """)
@@ -149,7 +135,11 @@ class SettingsWidget(QWidget):
         self.user_role = self._style_input(QComboBox())
         self.user_role.addItems(["Opérateur", "Admin", "Superviseur"])
         
+        self.ui_theme = self._style_input(QComboBox())
+        self.ui_theme.addItems(["dark", "light"])
+        
         layout.addRow("Rôle actif:", self.user_role)
+        layout.addRow("Thème (Nécessite redémarrage):", self.ui_theme)
         
     def setup_tab_automation(self):
         tab, layout = self._create_form_tab("Automatisation")
@@ -193,19 +183,16 @@ class SettingsWidget(QWidget):
         for btn in [self.btn_import, self.btn_export, self.btn_save]:
             btn.setStyleSheet("""
                 QPushButton {
-                    background-color: #313244;
-                    color: #cdd6f4;
                     padding: 8px 15px;
                     border-radius: 4px;
-                    border: none;
+                    border: 1px solid #D97A27;
                 }
-                QPushButton:hover { background-color: #45475a; }
                 QPushButton#primary {
-                    background-color: #a6e3a1;
-                    color: #11111b;
+                    background-color: #D97A27;
+                    color: #FFFFFF;
                     font-weight: bold;
                 }
-                QPushButton#primary:hover { background-color: #94e2d5; }
+                QPushButton#primary:hover { background-color: #A05A1C; }
             """)
             
         self.btn_import.clicked.connect(self.import_config)
@@ -254,6 +241,11 @@ class SettingsWidget(QWidget):
             idx = self.user_role.findText(role)
             if idx >= 0: self.user_role.setCurrentIndex(idx)
             
+        theme = self.config.get("ui", "theme")
+        if theme:
+            idx = self.ui_theme.findText(theme)
+            if idx >= 0: self.ui_theme.setCurrentIndex(idx)
+            
         # Automation
         self.group_delay.setValue(self.config.get("automation", "group_delay_minutes") or 5)
         self.max_files.setValue(self.config.get("automation", "max_files_per_job") or 50)
@@ -290,8 +282,9 @@ class SettingsWidget(QWidget):
         self.config.set("output", "enable_notifications", self.enable_notifications.isChecked())
         self.config.set("export", "icc_profile", self.icc_profile.text())
         
-        # Users
+        # Users & UI
         self.config.set("users", "role", self.user_role.currentText())
+        self.config.set("ui", "theme", self.ui_theme.currentText())
         
         # Automation
         self.config.set("automation", "group_delay_minutes", self.group_delay.value())

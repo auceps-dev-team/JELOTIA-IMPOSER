@@ -10,13 +10,16 @@ def main():
     app_logger.info("Starting Jelotia Imposer...")
     app = QApplication(sys.argv)
     
-    # Load stylesheet
-    qss_path = Path(__file__).parent / "src" / "ui" / "resources" / "dark_theme.qss"
-    if qss_path.exists():
-        with open(qss_path, "r", encoding="utf-8") as f:
-            app.setStyleSheet(f.read())
+    from src.ui.theme import ThemeManager
+    from src.utils.config_manager import ConfigManager
+    
+    config = ConfigManager()
+    theme = config.get("ui", "theme") or "dark"
+    
+    if theme == "light":
+        ThemeManager.apply_light_theme(app)
     else:
-        app_logger.warning(f"Stylesheet not found at {qss_path}")
+        ThemeManager.apply_dark_theme(app)
         
     window = MainWindow()
     window.show()

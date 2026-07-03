@@ -1,0 +1,44 @@
+{
+    "paths": {
+        "input": "",
+        "output": "",
+        "archive": "",
+        "logs": ""
+    },
+    "imposition": {
+        "sheet_width": 320,
+        "sheet_height": 450,
+        "spacing": 5,
+        "rotation_allowed": true
+    },
+    "preflight": {
+        "min_dpi": 300,
+        "allowed_formats": "A4, A5, B2"
+    },
+    "export": {
+        "format": "TIFF",
+        "resolution": 300,
+        "icc_profile": "Coated FOGRA39",
+        "dpi": 300
+    },
+    "users": {
+        "role": "Admin"
+    },
+    "automation": {
+        "group_delay_minutes": 5,
+        "max_files_per_job": 50,
+        "scheduled_time": "",
+        "enable_scheduling": false
+    },
+    "output": {
+        "archive_days": 15,
+        "enable_notifications": true
+    },
+    "performance": {
+        "workers": 4,
+        "memory_limit_mb": 4096
+    },
+    "ui": {
+        "theme": "dark"
+    }
+}

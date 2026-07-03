@@ -9,10 +9,13 @@ from src.ui.widgets.job_dialog import JobDialog
 
 class JobsWidget(QWidget):
     view_details_requested = Signal(str) # Emits job name
+    cancel_job_requested = Signal(str)
+    resume_job_requested = Signal(str)
     
     def __init__(self):
         super().__init__()
         self.setAcceptDrops(True) # Enable Drag & Drop
+        self.job_uuid_map = {} # uuid_str -> group_name
         self.setup_ui()
         
     def setup_ui(self):
@@ -22,7 +25,7 @@ class JobsWidget(QWidget):
         
         # Header / Title
         title = QLabel("Gestion des Jobs")
-        title.setStyleSheet("font-size: 24px; font-weight: bold; color: #cdd6f4;")
+        title.setStyleSheet("font-size: 24px; font-weight: bold;")
         self.main_layout.addWidget(title)
         
         # Toolbar (Search, Filter, New Job)
@@ -39,9 +42,7 @@ class JobsWidget(QWidget):
         self.search_input.setFixedWidth(250)
         self.search_input.setStyleSheet("""
             QLineEdit {
-                background-color: #181825;
-                color: #cdd6f4;
-                border: 1px solid #313244;
+                border: 1px solid #D97A27;
                 padding: 8px;
                 border-radius: 4px;
             }
@@ -51,9 +52,7 @@ class JobsWidget(QWidget):
         self.status_filter.addItems(["Tous les statuts", "PENDING", "PROCESSING", "DONE", "ERROR"])
         self.status_filter.setStyleSheet("""
             QComboBox {
-                background-color: #181825;
-                color: #cdd6f4;
-                border: 1px solid #313244;
+                border: 1px solid #D97A27;
                 padding: 8px;
                 border-radius: 4px;
             }
@@ -62,15 +61,15 @@ class JobsWidget(QWidget):
         self.btn_new_job = QPushButton("+ Nouveau Job")
         self.btn_new_job.setStyleSheet("""
             QPushButton {
-                background-color: #89b4fa;
-                color: #11111b;
+                background-color: #D97A27;
+                color: #FFFFFF;
                 font-weight: bold;
                 padding: 8px 15px;
                 border-radius: 4px;
                 border: none;
             }
             QPushButton:hover {
-                background-color: #b4befe;
+                background-color: #A05A1C;
             }
         """)
         self.btn_new_job.clicked.connect(self.open_new_job_dialog)
@@ -89,18 +88,12 @@ class JobsWidget(QWidget):
         # Table Styling
         self.table.setStyleSheet("""
             QTableWidget {
-                background-color: #181825;
-                color: #cdd6f4;
-                border: 1px solid #313244;
-                gridline-color: #313244;
-                selection-background-color: #313244;
+                border: 1px solid #D97A27;
             }
             QHeaderView::section {
-                background-color: #11111b;
-                color: #a6adc8;
                 font-weight: bold;
                 border: none;
-                border-bottom: 2px solid #313244;
+                border-bottom: 2px solid #D97A27;
                 padding: 5px;
             }
         """)
@@ -113,6 +106,8 @@ class JobsWidget(QWidget):
         
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self.show_context_menu)
         
         self.main_layout.addWidget(self.table)
         
@@ -142,7 +137,7 @@ class JobsWidget(QWidget):
         
         # Action button placeholder
         btn_action = QPushButton("Détails")
-        btn_action.setStyleSheet("background-color: #313244; padding: 4px; border-radius: 2px;")
+        btn_action.setStyleSheet("padding: 4px; border-radius: 2px;")
         btn_action.clicked.connect(lambda: self.view_details_requested.emit(name))
         self.table.setCellWidget(row, 5, btn_action)
         
@@ -152,6 +147,28 @@ class JobsWidget(QWidget):
         import datetime
         date_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         self.add_mock_job(name, status, 1, 0, date_str)
+        
+    def _find_row_by_name(self, job_name):
+        items = self.table.findItems(job_name, Qt.MatchExactly)
+        if items:
+            return items[0].row()
+        return -1
+
+    def update_job_status(self, job_id_str, status, sheets_count=None):
+        job_name = self.job_uuid_map.get(job_id_str, job_id_str)
+        row = self._find_row_by_name(job_name)
+        if row != -1:
+            status_item = self.table.item(row, 1)
+            status_item.setText(status)
+            if status == "DONE":
+                status_item.setForeground(Qt.green)
+            elif status == "PROCESSING":
+                status_item.setForeground(Qt.yellow)
+            elif status == "ERROR":
+                status_item.setForeground(Qt.red)
+                
+            if sheets_count is not None:
+                self.table.item(row, 3).setText(str(sheets_count))
         
     def open_new_job_dialog(self, files=None):
         dialog = JobDialog(self, files)
@@ -168,3 +185,38 @@ class JobsWidget(QWidget):
         files = [url.toLocalFile() for url in event.mimeData().urls()]
         if files:
             self.open_new_job_dialog(files=files)
+
+    def show_context_menu(self, pos):
+        from PySide6.QtWidgets import QMenu
+        item = self.table.itemAt(pos)
+        if not item:
+            return
+            
+        row = item.row()
+        job_name = self.table.item(row, 0).text()
+        status = self.table.item(row, 1).text()
+        
+        menu = QMenu(self)
+        
+        if status in ["PENDING", "PROCESSING"]:
+            action_cancel = menu.addAction("Annuler le Job")
+            action_cancel.triggered.connect(lambda: self.cancel_job(job_name, row))
+        elif status == "ERROR":
+            action_resume = menu.addAction("Reprendre le Job")
+            action_resume.triggered.connect(lambda: self.resume_job(job_name, row))
+            action_errors = menu.addAction("Voir les erreurs")
+            action_errors.triggered.connect(lambda: QMessageBox.information(self, "Erreurs", f"Erreurs pour {job_name}"))
+            
+        menu.exec_(self.table.viewport().mapToGlobal(pos))
+        
+    def cancel_job(self, job_name, row):
+        status_item = self.table.item(row, 1)
+        status_item.setText("CANCELLED")
+        status_item.setForeground(Qt.darkGray)
+        self.cancel_job_requested.emit(job_name)
+        
+    def resume_job(self, job_name, row):
+        status_item = self.table.item(row, 1)
+        status_item.setText("PENDING")
+        status_item.setForeground(Qt.white)
+        self.resume_job_requested.emit(job_name)

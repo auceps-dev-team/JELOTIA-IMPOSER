@@ -14,50 +14,6 @@ class PreflightDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Rapport Preflight")
         self.resize(700, 500)
-        self.setStyleSheet("""
-            QDialog {
-                background-color: #1e1e2e;
-                color: #cdd6f4;
-            }
-            QLabel { color: #cdd6f4; }
-            QTreeWidget {
-                background-color: #181825;
-                color: #cdd6f4;
-                border: 1px solid #313244;
-                border-radius: 4px;
-            }
-            QTreeWidget::item:selected {
-                background-color: #313244;
-            }
-            QTextEdit {
-                background-color: #181825;
-                color: #cdd6f4;
-                border: 1px solid #313244;
-                border-radius: 4px;
-                padding: 5px;
-            }
-            QPushButton {
-                background-color: #313244;
-                color: #cdd6f4;
-                padding: 8px 15px;
-                border-radius: 4px;
-                border: none;
-            }
-            QPushButton:hover { background-color: #45475a; }
-            QPushButton#primary {
-                background-color: #a6e3a1;
-                color: #11111b;
-                font-weight: bold;
-            }
-            QPushButton#primary:hover { background-color: #94e2d5; }
-            QPushButton#warning {
-                background-color: #f9e2af;
-                color: #11111b;
-                font-weight: bold;
-            }
-            QPushButton#warning:hover { background-color: #f38ba8; }
-        """)
-        
         self.errors = errors or {}
         self.setup_ui()
         self.populate_tree()
@@ -67,7 +23,7 @@ class PreflightDialog(QDialog):
         
         # Header
         title = QLabel("⚠️ Des anomalies ont été détectées lors de l'analyse (Preflight)")
-        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #f9e2af;")
+        title.setObjectName("preflightWarningTitle")
         layout.addWidget(title)
         
         # Splitter for Tree and Details
