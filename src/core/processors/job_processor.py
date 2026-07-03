@@ -82,12 +82,28 @@ def process_job_files(
     # 5. Layout (Generates PDF for sheets)
     if sheets:
         from src.core.engines.layout_engine import LayoutEngine
+        from src.core.engines.export_engine import ExportEngine
         layout_engine = LayoutEngine()
+        export_engine = ExportEngine()
         try:
-            # We use output_dir from config for final PDFs
+            # We use processing_dir for the temporary base PDF
+            job_temp_dir = config.processing_dir / str(job_id)
+            sheets = layout_engine.process_job_layout(job_id, sheets, settings, job_temp_dir)
+            
+            # 6. Export (Converts to PDF/X, TIFF, or JPEG based on settings)
             job_output_dir = config.output_dir / str(job_id)
-            sheets = layout_engine.process_job_layout(job_id, sheets, settings, job_output_dir)
+            for sheet in sheets:
+                if sheet.export_path and sheet.export_path.exists():
+                    final_path = export_engine.export_sheet(
+                        job_id=job_id,
+                        sheet=sheet,
+                        base_pdf_path=sheet.export_path,
+                        settings=settings,
+                        output_dir=job_output_dir
+                    )
+                    # Update export_path to the final output file
+                    sheet.export_path = final_path
         except Exception as e:
-            logger.exception(f"Fatal error during layout generation: {e}")
+            logger.exception(f"Fatal error during layout or export generation: {e}")
 
     return processed_items, sheets

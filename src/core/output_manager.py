@@ -47,6 +47,36 @@ class OutputManager:
             shutil.move(str(p), str(dest))
         return str(dest)
         
+    def generate_job_ticket(self, job_id: str, file_paths: list, dest_dir: Path):
+        """Generates a simple XML Job Ticket (JDF lite) for the RIP"""
+        ticket_path = dest_dir / f"job_ticket_{str(job_id)[:8]}.xml"
+        try:
+            with open(ticket_path, "w", encoding="utf-8") as f:
+                f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+                f.write(f'<JobTicket JobID="{job_id}" Date="{datetime.now().isoformat()}">\n')
+                f.write('  <Files>\n')
+                for fp in file_paths:
+                    f.write(f'    <File Path="{Path(fp).name}" />\n')
+                f.write('  </Files>\n')
+                f.write('</JobTicket>\n')
+            return str(ticket_path)
+        except Exception as e:
+            print(f"Failed to generate Job Ticket: {e}")
+            return None
+
+    def copy_to_rip_hot_folder(self, file_paths: list, rip_dir: str):
+        """Copies final files to an external RIP hot folder"""
+        rip_path = Path(rip_dir)
+        rip_path.mkdir(parents=True, exist_ok=True)
+        copied = []
+        for fp in file_paths:
+            p = Path(fp)
+            if p.exists():
+                dest = rip_path / p.name
+                shutil.copy(str(p), str(dest))
+                copied.append(str(dest))
+        return copied
+        
     def archive_files(self, job_name: str, file_paths: list):
         """Zips the original source files into Archive/YYYY/MM/DD/"""
         today = datetime.now()
