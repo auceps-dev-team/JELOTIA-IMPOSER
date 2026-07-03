@@ -68,6 +68,12 @@ class JobSettings(BaseModel):
     draw_cutlines: bool = True
     add_crop_marks: bool = True
 
+    # Layout extras
+    add_qr_code: bool = False
+    qr_code_size_mm: float = 20.0
+    generate_thumbnail: bool = True
+    separate_cut_layer: bool = False
+
 
 class FileItem(BaseModel):
     id: UUID = Field(default_factory=uuid4)
@@ -102,6 +108,8 @@ class Sheet(BaseModel):
     items: List[PlacedItem] = Field(default_factory=list)
     fill_rate: float = 0.0
     export_path: Optional[Path] = None
+    thumbnail_path: Optional[Path] = None
+    cut_layer_path: Optional[Path] = None
 
 
 class JobStats(BaseModel):

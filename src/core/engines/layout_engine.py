@@ -2,12 +2,13 @@ import io
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
 import fitz  # PyMuPDF
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
+from reportlab.lib.utils import ImageReader
 
 from src.core.models.domain import Sheet, JobSettings
 
@@ -16,128 +17,239 @@ logger = logging.getLogger(__name__)
 
 class LayoutEngine:
     """
-    LayoutEngine generates the final imposed PDF sheet.
-    It combines ReportLab for vector drawing (crop marks, cutlines, metadata)
-    and PyMuPDF for embedding the source artwork.
+    Generates the final imposed PDF sheet combining ReportLab (vector marks, QR)
+    and PyMuPDF (artwork embedding). Also produces thumbnails and optional cut layers.
     """
 
-    def generate_sheet_pdf(self, job_id: UUID, sheet: Sheet, settings: JobSettings, export_dir: Path) -> Path:
-        """
-        Generates the PDF for a specific sheet.
-        """
-        # 1. Generate the base canvas with ReportLab in memory
-        packet = io.BytesIO()
-        
-        # ReportLab canvas uses points (1/72 inch). 1 mm = 2.83465 points
-        # ReportLab coordinates: (0,0) is bottom-left
-        c = canvas.Canvas(packet, pagesize=(sheet.width_mm * mm, sheet.height_mm * mm))
+    # ------------------------------------------------------------------ #
+    #  Public API                                                          #
+    # ------------------------------------------------------------------ #
 
-        # Draw Job Metadata (Top Left corner)
-        c.setFont("Helvetica", 10)
-        c.drawString(10 * mm, (sheet.height_mm - 15) * mm, f"Job: {job_id}")
-        c.drawString(10 * mm, (sheet.height_mm - 20) * mm, f"Sheet: {sheet.sheet_number}")
-        c.drawString(10 * mm, (sheet.height_mm - 25) * mm, f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-        c.drawString(10 * mm, (sheet.height_mm - 30) * mm, f"Fill Rate: {sheet.fill_rate:.2f}%")
-
-        # Draw marks for each placed item
-        crop_mark_length = 5 * mm
-        crop_mark_offset = 2 * mm
-
-        for item in sheet.items:
-            # item coordinates are in mm from bottom-left (since we defined it that way, 
-            # wait, rectpack puts (0,0) at bottom-left, so we can map directly)
-            x_pt = item.x_mm * mm
-            y_pt = item.y_mm * mm
-            w_pt = item.width_mm * mm
-            h_pt = item.height_mm * mm
-
-            # Draw Cutlines if enabled
-            if settings.draw_cutlines:
-                c.setStrokeColorRGB(1, 0, 0) # Red
-                c.setLineWidth(0.5)
-                c.rect(x_pt, y_pt, w_pt, h_pt)
-
-            # Draw Crop marks (Hirondelles)
-            if settings.add_crop_marks:
-                c.setStrokeColorRGB(0, 0, 0) # Registration Black ideally, but standard black is fine for now
-                c.setLineWidth(0.3)
-                
-                # Bottom-Left corner
-                c.line(x_pt - crop_mark_offset, y_pt, x_pt - crop_mark_offset - crop_mark_length, y_pt) # Horiz
-                c.line(x_pt, y_pt - crop_mark_offset, x_pt, y_pt - crop_mark_offset - crop_mark_length) # Vert
-                
-                # Bottom-Right corner
-                c.line(x_pt + w_pt + crop_mark_offset, y_pt, x_pt + w_pt + crop_mark_offset + crop_mark_length, y_pt) # Horiz
-                c.line(x_pt + w_pt, y_pt - crop_mark_offset, x_pt + w_pt, y_pt - crop_mark_offset - crop_mark_length) # Vert
-
-                # Top-Left corner
-                c.line(x_pt - crop_mark_offset, y_pt + h_pt, x_pt - crop_mark_offset - crop_mark_length, y_pt + h_pt) # Horiz
-                c.line(x_pt, y_pt + h_pt + crop_mark_offset, x_pt, y_pt + h_pt + crop_mark_offset + crop_mark_length) # Vert
-
-                # Top-Right corner
-                c.line(x_pt + w_pt + crop_mark_offset, y_pt + h_pt, x_pt + w_pt + crop_mark_offset + crop_mark_length, y_pt + h_pt) # Horiz
-                c.line(x_pt + w_pt, y_pt + h_pt + crop_mark_offset, x_pt + w_pt, y_pt + h_pt + crop_mark_offset + crop_mark_length) # Vert
-
-        c.save()
-        packet.seek(0)
-
-        # 2. Merge artwork using PyMuPDF
+    def generate_sheet_pdf(
+        self, job_id: UUID, sheet: Sheet, settings: JobSettings, export_dir: Path
+    ) -> Path:
         export_dir.mkdir(parents=True, exist_ok=True)
         export_path = export_dir / f"job_{str(job_id)[:8]}_sheet_{sheet.sheet_number}.pdf"
 
-        # Load the base canvas we just created
+        # 1. Base canvas with ReportLab (marks, metadata, QR)
+        packet = self._build_base_canvas(job_id, sheet, settings)
+
+        # 2. Stamp artwork via PyMuPDF
         base_pdf = fitz.open("pdf", packet)
         base_page = base_pdf[0]
-
-        # PyMuPDF coordinates: (0,0) is TOP-LEFT. 
-        # So we need to convert Y coordinate from bottom-left to top-left.
-        for item in sheet.items:
-            src_doc = fitz.open(str(item.source_path))
-            # PyMuPDF uses rects (x0, y0, x1, y1) in top-left origin
-            # Calculate top-left for placing:
-            # y_bottom_left = item.y_mm
-            # top_left_y = sheet.height_mm - (item.y_mm + item.height_mm)
-            
-            x0_pt = item.x_mm * 2.83465
-            y0_pt = (sheet.height_mm - (item.y_mm + item.height_mm)) * 2.83465
-            x1_pt = x0_pt + (item.width_mm * 2.83465)
-            y1_pt = y0_pt + (item.height_mm * 2.83465)
-
-            target_rect = fitz.Rect(x0_pt, y0_pt, x1_pt, y1_pt)
-
-            # Rotation mapping (rectpack rotation is typically 90 degrees if rotated)
-            rotation = 90 if item.rotated else 0
-
-            if src_doc.is_pdf:
-                # Stamp the page
-                base_page.show_pdf_page(
-                    target_rect, 
-                    src_doc, 
-                    0, 
-                    keep_proportion=True, 
-                    rotate=rotation
-                )
-            else:
-                # It's an image (e.g. TIFF from CorrectionEngine)
-                base_page.insert_image(
-                    target_rect,
-                    filename=str(item.source_path),
-                    rotate=rotation
-                )
-            src_doc.close()
-
+        self._stamp_artwork(base_page, sheet)
         base_pdf.save(str(export_path))
         base_pdf.close()
 
-        logger.info(f"Generated sheet PDF at {export_path}")
+        logger.info(f"Generated sheet PDF: {export_path}")
         return export_path
 
-    def process_job_layout(self, job_id: UUID, sheets: List[Sheet], settings: JobSettings, export_dir: Path) -> List[Sheet]:
-        """
-        Processes all sheets for a job and updates their export_path.
-        """
+    def process_job_layout(
+        self, job_id: UUID, sheets: List[Sheet], settings: JobSettings, export_dir: Path
+    ) -> List[Sheet]:
         for sheet in sheets:
             pdf_path = self.generate_sheet_pdf(job_id, sheet, settings, export_dir)
             sheet.export_path = pdf_path
-            
+
+            if settings.generate_thumbnail:
+                sheet.thumbnail_path = self._generate_thumbnail(pdf_path, export_dir)
+
+            if settings.separate_cut_layer:
+                sheet.cut_layer_path = self._generate_cut_layer(
+                    job_id, sheet, settings, export_dir
+                )
+
         return sheets
+
+    # ------------------------------------------------------------------ #
+    #  ReportLab canvas                                                    #
+    # ------------------------------------------------------------------ #
+
+    def _build_base_canvas(
+        self, job_id: UUID, sheet: Sheet, settings: JobSettings
+    ) -> io.BytesIO:
+        packet = io.BytesIO()
+        c = canvas.Canvas(packet, pagesize=(sheet.width_mm * mm, sheet.height_mm * mm))
+
+        self._draw_metadata(c, job_id, sheet)
+        self._draw_item_marks(c, sheet, settings)
+
+        if settings.add_qr_code:
+            self._draw_qr_code(c, job_id, sheet, settings)
+
+        c.save()
+        packet.seek(0)
+        return packet
+
+    def _draw_metadata(self, c: canvas.Canvas, job_id: UUID, sheet: Sheet) -> None:
+        c.setFont("Helvetica", 8)
+        c.setFillColorRGB(0.3, 0.3, 0.3)
+        top = sheet.height_mm
+        c.drawString(10 * mm, (top - 10) * mm, f"Job: {str(job_id)[:8].upper()}")
+        c.drawString(10 * mm, (top - 15) * mm, f"Planche: {sheet.sheet_number}")
+        c.drawString(10 * mm, (top - 20) * mm, f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+        c.drawString(10 * mm, (top - 25) * mm, f"Remplissage: {sheet.fill_rate:.1f}%")
+        c.drawString(10 * mm, (top - 30) * mm, f"Elements: {len(sheet.items)}")
+
+    def _draw_item_marks(self, c: canvas.Canvas, sheet: Sheet, settings: JobSettings) -> None:
+        crop_len = 5 * mm
+        crop_off = 2 * mm
+
+        for item in sheet.items:
+            x = item.x_mm * mm
+            y = item.y_mm * mm
+            w = item.width_mm * mm
+            h = item.height_mm * mm
+
+            if settings.draw_cutlines:
+                c.setStrokeColorRGB(1, 0, 0)
+                c.setLineWidth(0.5)
+                c.rect(x, y, w, h)
+
+            if settings.add_crop_marks:
+                c.setStrokeColorRGB(0, 0, 0)
+                c.setLineWidth(0.25)
+                # Bottom-left
+                c.line(x - crop_off, y, x - crop_off - crop_len, y)
+                c.line(x, y - crop_off, x, y - crop_off - crop_len)
+                # Bottom-right
+                c.line(x + w + crop_off, y, x + w + crop_off + crop_len, y)
+                c.line(x + w, y - crop_off, x + w, y - crop_off - crop_len)
+                # Top-left
+                c.line(x - crop_off, y + h, x - crop_off - crop_len, y + h)
+                c.line(x, y + h + crop_off, x, y + h + crop_off + crop_len)
+                # Top-right
+                c.line(x + w + crop_off, y + h, x + w + crop_off + crop_len, y + h)
+                c.line(x + w, y + h + crop_off, x + w, y + h + crop_off + crop_len)
+
+    # ------------------------------------------------------------------ #
+    #  QR Code                                                             #
+    # ------------------------------------------------------------------ #
+
+    def _draw_qr_code(
+        self, c: canvas.Canvas, job_id: UUID, sheet: Sheet, settings: JobSettings
+    ) -> None:
+        try:
+            import qrcode as qr_lib
+
+            qr_data = (
+                f"JELOTIA|JOB:{str(job_id)[:8].upper()}"
+                f"|SHEET:{sheet.sheet_number}"
+                f"|ITEMS:{len(sheet.items)}"
+                f"|FILL:{sheet.fill_rate:.1f}%"
+            )
+            qr = qr_lib.QRCode(version=1, box_size=10, border=1)
+            qr.add_data(qr_data)
+            qr.make(fit=True)
+            img = qr.make_image(fill_color="black", back_color="white")
+
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            buf.seek(0)
+
+            size_pt = settings.qr_code_size_mm * mm
+            x_pt = (sheet.width_mm - settings.qr_code_size_mm - 5) * mm
+            y_pt = 5 * mm
+
+            c.drawImage(ImageReader(buf), x_pt, y_pt, width=size_pt, height=size_pt)
+            logger.debug(f"QR code drawn for job {job_id} sheet {sheet.sheet_number}")
+        except ImportError:
+            logger.warning("qrcode package not installed — QR code skipped")
+        except Exception as e:
+            logger.warning(f"QR code generation failed: {e}")
+
+    # ------------------------------------------------------------------ #
+    #  Artwork stamping (PyMuPDF)                                          #
+    # ------------------------------------------------------------------ #
+
+    def _stamp_artwork(self, base_page: fitz.Page, sheet: Sheet) -> None:
+        sheet_h_pt = sheet.height_mm * 2.83465
+
+        for item in sheet.items:
+            x0 = item.x_mm * 2.83465
+            y0 = sheet_h_pt - (item.y_mm + item.height_mm) * 2.83465
+            x1 = x0 + item.width_mm * 2.83465
+            y1 = y0 + item.height_mm * 2.83465
+            rect = fitz.Rect(x0, y0, x1, y1)
+            rotation = 90 if item.rotated else 0
+
+            try:
+                src = fitz.open(str(item.source_path))
+                if src.is_pdf:
+                    base_page.show_pdf_page(rect, src, 0, keep_proportion=True, rotate=rotation)
+                else:
+                    base_page.insert_image(rect, filename=str(item.source_path), rotate=rotation)
+                src.close()
+            except Exception as e:
+                logger.error(f"Could not stamp artwork {item.source_path}: {e}")
+
+    # ------------------------------------------------------------------ #
+    #  Thumbnail                                                           #
+    # ------------------------------------------------------------------ #
+
+    def _generate_thumbnail(self, pdf_path: Path, export_dir: Path) -> Optional[Path]:
+        try:
+            doc = fitz.open(str(pdf_path))
+            page = doc[0]
+            # Scale to max 400px wide for a decent low-res preview
+            scale = min(400 / page.rect.width, 1.0)
+            mat = fitz.Matrix(scale, scale)
+            pix = page.get_pixmap(matrix=mat, colorspace=fitz.csRGB)
+            thumb_path = export_dir / (pdf_path.stem + "_thumb.png")
+            pix.save(str(thumb_path))
+            doc.close()
+            logger.debug(f"Thumbnail generated: {thumb_path}")
+            return thumb_path
+        except Exception as e:
+            logger.warning(f"Thumbnail generation failed for {pdf_path}: {e}")
+            return None
+
+    # ------------------------------------------------------------------ #
+    #  Cut layer (separate PDF with only cut marks)                        #
+    # ------------------------------------------------------------------ #
+
+    def _generate_cut_layer(
+        self, job_id: UUID, sheet: Sheet, settings: JobSettings, export_dir: Path
+    ) -> Optional[Path]:
+        try:
+            packet = io.BytesIO()
+            c = canvas.Canvas(packet, pagesize=(sheet.width_mm * mm, sheet.height_mm * mm))
+
+            crop_len = 5 * mm
+            crop_off = 2 * mm
+
+            for item in sheet.items:
+                x = item.x_mm * mm
+                y = item.y_mm * mm
+                w = item.width_mm * mm
+                h = item.height_mm * mm
+
+                # Cut path in red
+                c.setStrokeColorRGB(1, 0, 0)
+                c.setLineWidth(0.5)
+                c.rect(x, y, w, h)
+
+                # Crop marks in black
+                c.setStrokeColorRGB(0, 0, 0)
+                c.setLineWidth(0.25)
+                c.line(x - crop_off, y, x - crop_off - crop_len, y)
+                c.line(x, y - crop_off, x, y - crop_off - crop_len)
+                c.line(x + w + crop_off, y, x + w + crop_off + crop_len, y)
+                c.line(x + w, y - crop_off, x + w, y - crop_off - crop_len)
+                c.line(x - crop_off, y + h, x - crop_off - crop_len, y + h)
+                c.line(x, y + h + crop_off, x, y + h + crop_off + crop_len)
+                c.line(x + w + crop_off, y + h, x + w + crop_off + crop_len, y + h)
+                c.line(x + w, y + h + crop_off, x + w, y + h + crop_off + crop_len)
+
+            c.save()
+            packet.seek(0)
+
+            cut_path = (
+                export_dir / f"job_{str(job_id)[:8]}_sheet_{sheet.sheet_number}_cutlayer.pdf"
+            )
+            cut_path.write_bytes(packet.read())
+            logger.debug(f"Cut layer generated: {cut_path}")
+            return cut_path
+        except Exception as e:
+            logger.warning(f"Cut layer generation failed: {e}")
+            return None

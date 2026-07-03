@@ -175,3 +175,39 @@ def test_nesting_too_large_item_warning(caplog):
     assert len(sheets) == 0  # No sheets will be created if nothing was packed
     assert "Could not pack all items! 0/1 packed." in caplog.text
 
+
+def test_fill_rate_benchmark_above_75_percent():
+    """Phase 6: fill_rate ≥ 75% sur corpus homogène (critère d'acceptation).
+
+    Scénario : 100 cartes de visite (85×55mm) sur planche 900×600mm avec gap 3mm.
+    Calcul théorique : floor(900/88) × floor(600/58) = 10×10 = 100 items/planche.
+    Fill rate = (100 × 85×55) / (900×600) = 86.5% > 75% attendu.
+    """
+    settings = JobSettings(
+        sheet_width_mm=900.0, sheet_height_mm=600.0, gap_mm=3.0, allow_rotation=False
+    )
+    items = [create_mock_file(85.0, 55.0, quantity=100)]
+
+    strategy = RectpackNestingStrategy(algo_type="maxrects")
+    sheets = strategy.pack(items, settings)
+
+    assert len(sheets) > 0, "Aucune planche générée"
+    avg_fill = sum(s.fill_rate for s in sheets) / len(sheets)
+    assert avg_fill >= 75.0, (
+        f"Fill rate {avg_fill:.1f}% inférieur au seuil 75% (corpus cartes de visite)"
+    )
+
+
+def test_nesting_guillotine_algo():
+    """Vérifie que l'algo guillotine produit aussi des résultats cohérents."""
+    settings = JobSettings(
+        sheet_width_mm=200.0, sheet_height_mm=200.0, gap_mm=0.0, allow_rotation=False
+    )
+    items = [create_mock_file(100, 100, quantity=4)]
+    strategy = RectpackNestingStrategy(algo_type="guillotine")
+    sheets = strategy.pack(items, settings)
+
+    assert len(sheets) == 1
+    assert len(sheets[0].items) == 4
+    assert sheets[0].fill_rate == 100.0
+
