@@ -57,10 +57,10 @@ class CorrectionEngine:
         try:
             if file_item.format in [FileFormat.PNG, FileFormat.JPEG, FileFormat.TIFF]:
                 new_path = self._correct_image(
-                    file_item, needs_cmyk, needs_flattening, needs_dpi_fix
+                    corrected_item, needs_cmyk, needs_flattening, needs_dpi_fix
                 )
             elif file_item.format == FileFormat.PDF:
-                new_path = self._correct_pdf(file_item, needs_cmyk, needs_flattening, needs_dpi_fix)
+                new_path = self._correct_pdf(corrected_item, needs_cmyk, needs_flattening, needs_dpi_fix)
             else:
                 return file_item
         except Exception:

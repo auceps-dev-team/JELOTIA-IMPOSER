@@ -108,14 +108,22 @@ class LayoutEngine:
             # Rotation mapping (rectpack rotation is typically 90 degrees if rotated)
             rotation = 90 if item.rotated else 0
 
-            # Stamp the page
-            base_page.show_pdf_page(
-                target_rect, 
-                src_doc, 
-                0, 
-                keep_proportion=True, 
-                rotate=rotation
-            )
+            if src_doc.is_pdf:
+                # Stamp the page
+                base_page.show_pdf_page(
+                    target_rect, 
+                    src_doc, 
+                    0, 
+                    keep_proportion=True, 
+                    rotate=rotation
+                )
+            else:
+                # It's an image (e.g. TIFF from CorrectionEngine)
+                base_page.insert_image(
+                    target_rect,
+                    filename=str(item.source_path),
+                    rotate=rotation
+                )
             src_doc.close()
 
         base_pdf.save(str(export_path))

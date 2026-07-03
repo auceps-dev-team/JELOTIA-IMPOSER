@@ -1,7 +1,7 @@
 import uuid
 from pathlib import Path
 
-from src.core.engines.nesting_engine import NestingEngine, RectpackNestingStrategy
+from src.core.engines.nesting_engine import NestingEngine, RectpackNestingStrategy, NestingStrategy
 from src.core.models.domain import (
     ColorMode,
     FileFormat,
@@ -143,3 +143,35 @@ def test_nesting_engine_filters_errors():
 
     assert len(sheets) == 1
     assert len(sheets[0].items) == 2  # Only OK and WARNING
+
+
+def test_nesting_abstract_strategy():
+    class MockStrategy(NestingStrategy):
+        def pack(self, items, settings):
+            super().pack(items, settings)
+            return []
+            
+    strategy = MockStrategy()
+    assert strategy.pack([], JobSettings()) == []
+
+
+def test_nesting_empty_items():
+    strategy = RectpackNestingStrategy(algo_type="maxrects")
+    settings = JobSettings()
+    assert strategy.pack([], settings) == []
+
+
+def test_nesting_too_large_item_warning(caplog):
+    settings = JobSettings(
+        sheet_width_mm=100.0, sheet_height_mm=100.0, gap_mm=0.0, allow_rotation=False
+    )
+
+    # Item is larger than the sheet, so it can never be packed
+    items = [create_mock_file(200, 200, quantity=1)]
+
+    strategy = RectpackNestingStrategy(algo_type="maxrects")
+    sheets = strategy.pack(items, settings)
+
+    assert len(sheets) == 0  # No sheets will be created if nothing was packed
+    assert "Could not pack all items! 0/1 packed." in caplog.text
+

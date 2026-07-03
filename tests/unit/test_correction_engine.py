@@ -36,6 +36,10 @@ def engine(settings, work_dir):
 def create_dummy_image(path: Path, mode: str = "RGB", size=(100, 100), dpi=(72, 72)):
     if mode == "RGBA":
         img = Image.new("RGBA", size, (255, 0, 0, 128))
+    elif mode == "LA":
+        img = Image.new("LA", size, (255, 128))
+    elif mode == "P":
+        img = Image.new("P", size, 1)
     else:
         img = Image.new(mode, size, color=0 if mode == "L" else (255, 0, 0))
     img.save(path, dpi=dpi)
@@ -186,3 +190,114 @@ def test_process_pdf_correction(engine, tmp_path):
     pix = fitz.Pixmap(doc, xref)
     assert pix.colorspace.n == 4  # CMYK has 4 components
     doc.close()
+
+
+def test_process_exception(engine, tmp_path):
+    # Pass a path that doesn't exist, which will raise an Exception in PIL/fitz
+    item = FileItem(
+        job_id="00000000-0000-0000-0000-000000000000",
+        path=tmp_path / "does_not_exist.jpg",
+        format=FileFormat.JPEG,
+        width_mm=100.0,
+        height_mm=100.0,
+        dpi=300,
+        color_mode=ColorMode.RGB,
+        preflight_status=PreflightStatus.WARNING,
+        preflight_errors=[
+            PreflightError(
+                type=PreflightErrorType.RESOLUTION_LOW, message="Low", is_blocking=False
+            )
+        ],
+    )
+    result = engine.process(item)
+    # Should return untouched because exception was caught
+    assert result.path == item.path
+
+
+def test_process_flattening_la(engine, tmp_path):
+    img_path = create_dummy_image(tmp_path / "test_la.png", mode="LA")
+    item = FileItem(
+        job_id="00000000-0000-0000-0000-000000000000",
+        path=img_path,
+        format=FileFormat.PNG,
+        width_mm=100.0,
+        height_mm=100.0,
+        dpi=300,
+        color_mode=ColorMode.RGB,
+        preflight_status=PreflightStatus.WARNING,
+        preflight_errors=[
+            PreflightError(
+                type=PreflightErrorType.TRANSPARENCY_DETECTED, message="Alpha", is_blocking=False
+            )
+        ],
+    )
+    result = engine.process(item)
+    assert result.preflight_status == PreflightStatus.OK
+
+
+def test_process_flattening_p(engine, tmp_path):
+    img_path = create_dummy_image(tmp_path / "test_p.png", mode="P")
+    item = FileItem(
+        job_id="00000000-0000-0000-0000-000000000000",
+        path=img_path,
+        format=FileFormat.PNG,
+        width_mm=100.0,
+        height_mm=100.0,
+        dpi=300,
+        color_mode=ColorMode.RGB,
+        preflight_status=PreflightStatus.WARNING,
+        preflight_errors=[
+            PreflightError(
+                type=PreflightErrorType.TRANSPARENCY_DETECTED, message="Alpha", is_blocking=False
+            )
+        ],
+    )
+    result = engine.process(item)
+    assert result.preflight_status == PreflightStatus.OK
+
+
+def test_process_add_bleed_image(engine, tmp_path):
+    engine.settings.add_bleed_mm = 5.0
+    img_path = create_dummy_image(tmp_path / "test_bleed.jpg", mode="RGB", dpi=(300, 300))
+    item = FileItem(
+        job_id="00000000-0000-0000-0000-000000000000",
+        path=img_path,
+        format=FileFormat.JPEG,
+        width_mm=100.0,
+        height_mm=100.0,
+        dpi=300,
+        color_mode=ColorMode.RGB,
+        preflight_status=PreflightStatus.WARNING,
+        preflight_errors=[
+            PreflightError(
+                type=PreflightErrorType.WRONG_COLOR_MODE, message="RGB", is_blocking=False
+            )
+        ],
+    )
+    result = engine.process(item)
+    assert result.width_mm == 110.0
+    assert result.height_mm == 110.0
+
+
+def test_process_add_bleed_pdf(engine, tmp_path):
+    engine.settings.add_bleed_mm = 5.0
+    pdf_path = create_dummy_pdf(tmp_path / "test_bleed.pdf")
+    item = FileItem(
+        job_id="00000000-0000-0000-0000-000000000000",
+        path=pdf_path,
+        format=FileFormat.PDF,
+        width_mm=100.0,
+        height_mm=100.0,
+        dpi=300,
+        color_mode=ColorMode.RGB,
+        preflight_status=PreflightStatus.WARNING,
+        preflight_errors=[
+            PreflightError(
+                type=PreflightErrorType.WRONG_COLOR_MODE, message="RGB", is_blocking=False
+            )
+        ],
+    )
+    result = engine.process(item)
+    assert result.width_mm == 110.0
+    assert result.height_mm == 110.0
+
