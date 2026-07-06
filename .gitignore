@@ -8,3 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Real-world field-test datasets (large binary sample files, not source code)
+QRC A7 BADGE 01072026/
