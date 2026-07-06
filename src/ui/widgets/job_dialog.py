@@ -1,11 +1,21 @@
-from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel,
-    QLineEdit, QPushButton, QListWidget, QFormLayout,
-    QComboBox, QSpinBox, QDialogButtonBox, QMessageBox, QFileDialog
-)
-from PySide6.QtCore import Qt
-from pathlib import Path
 import uuid
+from pathlib import Path
+
+from PySide6.QtWidgets import (
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QMessageBox,
+    QPushButton,
+    QSpinBox,
+    QVBoxLayout,
+)
 
 
 class JobDialog(QDialog):

@@ -1,9 +1,12 @@
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
+
 import fitz  # PyMuPDF
-from PySide6.QtCore import QThread, Signal, QMutex, QMutexLocker
+from PySide6.QtCore import QMutex, QMutexLocker, QThread, Signal
+
 from src.utils.config_manager import ConfigManager
+
 
 class AutoProcessor(QThread):
     job_grouped = Signal(str, list) # Emits (Group Name, list of file paths)

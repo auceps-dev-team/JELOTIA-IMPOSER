@@ -6,11 +6,11 @@ from typing import List, Optional
 from uuid import UUID
 
 import fitz  # PyMuPDF
-from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
+from reportlab.pdfgen import canvas
 
-from src.core.models.domain import Sheet, JobSettings
+from src.core.models.domain import JobSettings, Sheet
 
 logger = logging.getLogger(__name__)
 

@@ -1,12 +1,21 @@
+
 import fitz  # PyMuPDF
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QImage, QPainter, QPixmap, QWheelEvent
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
-    QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
-    QLabel, QFrame, QSizePolicy, QFileDialog, QMessageBox
+    QFileDialog,
+    QFrame,
+    QGraphicsPixmapItem,
+    QGraphicsScene,
+    QGraphicsView,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtGui import QPixmap, QImage, QPainter, QWheelEvent, QMouseEvent
-from PySide6.QtCore import Qt, QPointF
-from pathlib import Path
+
 
 class ZoomableView(QGraphicsView):
     def __init__(self, scene, parent=None):

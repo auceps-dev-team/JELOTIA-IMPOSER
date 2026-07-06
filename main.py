@@ -1,10 +1,10 @@
 import sys
-from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
 
-from src.utils.logger import app_logger
 from src.ui.main_window import MainWindow
+from src.utils.logger import app_logger
+
 
 def main():
     app_logger.info("Starting Jelotia Imposer...")

@@ -1,11 +1,23 @@
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-    QPushButton, QTabWidget, QFormLayout, QLineEdit,
-    QSpinBox, QComboBox, QCheckBox, QFileDialog, QMessageBox
-)
+
 from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QFileDialog,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QSpinBox,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+)
+
 from src.utils.config_manager import ConfigManager
-import shutil
+
 
 class SettingsWidget(QWidget):
     def __init__(self, parent=None):

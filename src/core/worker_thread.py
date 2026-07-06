@@ -1,12 +1,13 @@
 import asyncio
 import threading
-from typing import List, Optional
 from pathlib import Path
+from typing import List, Optional
 from uuid import UUID
+
 from PySide6.QtCore import QThread, Signal
 
+from src.core.models.domain import JobSettings
 from src.core.processors.worker_pool import WorkerPoolManager
-from src.core.models.domain import JobSettings, FileItem, Sheet
 
 
 class WorkerPoolThread(QThread):

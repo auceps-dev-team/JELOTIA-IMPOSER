@@ -1,11 +1,21 @@
 import datetime
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QLineEdit, QPushButton, QTableWidget, QTableWidgetItem,
-    QHeaderView, QComboBox, QFrame, QMessageBox
-)
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
+from PySide6.QtWidgets import (
+    QComboBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+
 from src.ui.widgets.job_dialog import JobDialog
 
 

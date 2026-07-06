@@ -1,10 +1,16 @@
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-    QFrame, QPushButton, QGridLayout, QSizePolicy, QApplication
-)
-from PySide6.QtCore import Qt
-import pyqtgraph as pg
 import numpy as np
+import pyqtgraph as pg
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QApplication,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
+
 
 class StatCard(QFrame):
     def __init__(self, title, value, color="#89b4fa"):

@@ -1,10 +1,12 @@
 import os
-import time
 import shutil
+import time
 from pathlib import Path
-from watchdog.observers import Observer
+
+from PySide6.QtCore import QMutex, QMutexLocker, QObject, QThread, Signal
 from watchdog.events import FileSystemEventHandler
-from PySide6.QtCore import QObject, Signal, QThread, QMutex, QMutexLocker
+from watchdog.observers import Observer
+
 
 class HotFolderSignals(QObject):
     # Emits the path of the ready job folder or file

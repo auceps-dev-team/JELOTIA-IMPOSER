@@ -1,10 +1,12 @@
-import os
 import shutil
 import zipfile
-from pathlib import Path
 from datetime import datetime, timedelta
-from PySide6.QtCore import QThread, Signal, QTimer
+from pathlib import Path
+
+from PySide6.QtCore import QTimer
+
 from src.utils.config_manager import ConfigManager
+
 
 class OutputManager:
     def __init__(self):

@@ -1,9 +1,18 @@
-from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
-    QPushButton, QTreeWidget, QTreeWidgetItem,
-    QTextEdit, QFrame, QDialogButtonBox, QMessageBox, QSplitter
-)
 from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QSplitter,
+    QTextEdit,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QVBoxLayout,
+)
+
 
 class PreflightDialog(QDialog):
     def __init__(self, parent=None, errors=None):
@@ -82,15 +91,16 @@ class PreflightDialog(QDialog):
         layout.addLayout(btn_layout)
         
     def export_report(self):
-        from PySide6.QtWidgets import QFileDialog
         from datetime import datetime
+
+        from PySide6.QtWidgets import QFileDialog
         
         save_path, _ = QFileDialog.getSaveFileName(self, "Exporter Rapport Preflight", "", "HTML Files (*.html)")
         if not save_path:
             return
             
-        html_content = f"<html><head><title>Rapport Preflight</title></head><body>"
-        html_content += f"<h1>Rapport d'Analyse (Preflight)</h1>"
+        html_content = "<html><head><title>Rapport Preflight</title></head><body>"
+        html_content += "<h1>Rapport d'Analyse (Preflight)</h1>"
         html_content += f"<p>Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>"
         
         for filename, err_list in self.errors.items():

@@ -1,6 +1,8 @@
-from PySide6.QtWidgets import QSystemTrayIcon
 from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import QSystemTrayIcon
+
 from src.utils.config_manager import ConfigManager
+
 
 class SystemNotifier:
     def __init__(self, parent=None):

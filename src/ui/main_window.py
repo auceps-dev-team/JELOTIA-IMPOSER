@@ -1,21 +1,26 @@
 import sys
 import uuid
 from pathlib import Path
-from typing import Optional
 
-from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QFrame, QPushButton, QStackedWidget, QLabel,
-    QSystemTrayIcon, QMenu
-)
 from PySide6.QtGui import QIcon
-from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QMenu,
+    QPushButton,
+    QStackedWidget,
+    QSystemTrayIcon,
+    QVBoxLayout,
+    QWidget,
+)
 
+from src.core.models.domain import JobSettings
+from src.core.output_manager import OutputManager
+from src.core.system_notifier import SystemNotifier
 from src.ui.widgets.job_queue import JobsWidget
 from src.ui.widgets.settings_view import SettingsWidget
-from src.core.system_notifier import SystemNotifier
-from src.core.output_manager import OutputManager
-from src.core.models.domain import JobSettings
 
 
 class MainWindow(QMainWindow):
@@ -248,9 +253,9 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ #
 
     def setup_hot_folder_monitor(self):
-        from src.utils.config_manager import ConfigManager
-        from src.core.hot_folder_monitor import HotFolderMonitor
         from src.core.auto_processor import AutoProcessor
+        from src.core.hot_folder_monitor import HotFolderMonitor
+        from src.utils.config_manager import ConfigManager
 
         config = ConfigManager()
         input_path = config.get("paths", "input") or str(

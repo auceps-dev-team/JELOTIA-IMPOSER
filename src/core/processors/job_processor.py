@@ -81,8 +81,8 @@ def process_job_files(
 
     # 5. Layout (Generates PDF for sheets)
     if sheets:
-        from src.core.engines.layout_engine import LayoutEngine
         from src.core.engines.export_engine import ExportEngine
+        from src.core.engines.layout_engine import LayoutEngine
         layout_engine = LayoutEngine()
         export_engine = ExportEngine()
         try:

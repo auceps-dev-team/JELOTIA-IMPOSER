@@ -2,21 +2,33 @@ import sys
 from pathlib import Path
 
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from src.utils.config_manager import ConfigManager
+
+
+def _resolve_base_dir() -> Path:
+    """Derive the base HotFolder directory from the user-configured input path
+    (config.json via ConfigManager), matching the fallback used by main_window
+    and OutputManager so all components agree on a single directory tree."""
+    input_path = ConfigManager().get("paths", "input") or str(
+        Path.home() / "Jelotia" / "HotFolder" / "Input"
+    )
+    return Path(input_path).parent
 
 
 class AppConfig(BaseModel):
     # Paths
-    base_dir: Path = Path("C:/Jelotia/HotFolder")
-    input_dir: Path = base_dir / "Input"
-    processing_dir: Path = base_dir / "Processing"
-    error_dir: Path = base_dir / "Error"
-    output_dir: Path = base_dir / "Output"
-    archive_dir: Path = base_dir / "Archive"
-    log_dir: Path = base_dir / "Logs"
+    base_dir: Path = Field(default_factory=_resolve_base_dir)
+    input_dir: Path = Field(default_factory=lambda: _resolve_base_dir() / "Input")
+    processing_dir: Path = Field(default_factory=lambda: _resolve_base_dir() / "Processing")
+    error_dir: Path = Field(default_factory=lambda: _resolve_base_dir() / "Error")
+    output_dir: Path = Field(default_factory=lambda: _resolve_base_dir() / "Output")
+    archive_dir: Path = Field(default_factory=lambda: _resolve_base_dir() / "Archive")
+    log_dir: Path = Field(default_factory=lambda: _resolve_base_dir() / "Logs")
 
     # Database
-    db_path: Path = base_dir / "jelotia_imposer.db"
+    db_path: Path = Field(default_factory=lambda: _resolve_base_dir() / "jelotia_imposer.db")
 
     def setup_directories(self) -> None:
         """Create all required directories if they don't exist."""

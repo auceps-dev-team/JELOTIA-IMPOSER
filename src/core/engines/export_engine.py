@@ -1,8 +1,6 @@
 import logging
-import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 from uuid import UUID
 
 import fitz  # PyMuPDF
