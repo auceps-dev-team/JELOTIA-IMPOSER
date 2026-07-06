@@ -55,15 +55,16 @@ class ImportEngine:
                 width_mm = (rect.width / 72.0) * 25.4
                 height_mm = (rect.height / 72.0) * 25.4
 
-                # Default assumptions for PDF, verified in Preflight
+                color_mode, effective_dpi = self._inspect_page_images(page, min_dpi)
+
                 item = FileItem(
                     job_id=job_id,
                     path=file_path,
                     format=FileFormat.PDF,
                     width_mm=round(width_mm, 2),
                     height_mm=round(height_mm, 2),
-                    dpi=min_dpi,
-                    color_mode=ColorMode.CMYK,
+                    dpi=effective_dpi,
+                    color_mode=color_mode,
                     quantity=1,
                 )
                 items.append(item)
@@ -72,6 +73,39 @@ class ImportEngine:
             raise Exception(f"PDF FileDataError: {str(e)}")
 
         return items
+
+    def _inspect_page_images(self, page, default_dpi: int) -> tuple:
+        """Inspects embedded raster images on a PDF page to determine the real
+        (worst-case) color mode and effective resolution. Pages with no raster
+        images (pure vector) fall back to CMYK/default_dpi, since there is no
+        source-color or resampling concern for vector content."""
+        color_mode = ColorMode.CMYK
+        lowest_dpi = None
+
+        for info in page.get_image_info(xrefs=True):
+            bbox = info.get("bbox")
+            width_px, height_px = info.get("width", 0), info.get("height", 0)
+            if not bbox or not width_px or not height_px:
+                continue
+
+            cs_name = info.get("cs-name", "")
+            if cs_name == "DeviceRGB":
+                color_mode = ColorMode.RGB
+            elif cs_name == "DeviceGray" and color_mode == ColorMode.CMYK:
+                color_mode = ColorMode.GRAY
+
+            # Effective DPI from the actual placed size, not the (often bogus)
+            # embedded xres/yres metadata.
+            bbox_width_in = (bbox[2] - bbox[0]) / 72.0
+            bbox_height_in = (bbox[3] - bbox[1]) / 72.0
+            if bbox_width_in > 0 and bbox_height_in > 0:
+                image_dpi = min(width_px / bbox_width_in, height_px / bbox_height_in)
+                if lowest_dpi is None or image_dpi < lowest_dpi:
+                    lowest_dpi = image_dpi
+
+        if lowest_dpi is None:
+            return color_mode, default_dpi
+        return color_mode, round(lowest_dpi)
 
     def _process_image(self, job_id: UUID, file_path: Path) -> List[FileItem]:
         items = []

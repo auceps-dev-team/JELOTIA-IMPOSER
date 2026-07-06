@@ -62,20 +62,40 @@ class MainWindow(QMainWindow):
         self.worker_thread.job_failed.connect(self.handle_job_failed)
         self.worker_thread.start()
 
+    # ExportEngine only implements these formats; other combo entries fall back to PDF/X.
+    _EXPORT_FORMAT_MAP = {
+        "PDF (STANDARD)": "PDF",
+        "JDF": "PDF/X-4",
+    }
+
+    def _build_job_settings(self) -> JobSettings:
+        """Builds JobSettings from the user-configured config.json (Settings screen)
+        instead of hardcoded defaults, so imposition/preflight/export settings
+        actually take effect on the next job."""
+        from src.utils.config_manager import ConfigManager
+
+        config = ConfigManager()
+        export_format = (config.get("export", "format") or "PDF/X-4").upper()
+        export_format = self._EXPORT_FORMAT_MAP.get(export_format, export_format)
+
+        return JobSettings(
+            sheet_width_mm=float(config.get("imposition", "sheet_width") or 900.0),
+            sheet_height_mm=float(config.get("imposition", "sheet_height") or 600.0),
+            gap_mm=float(config.get("imposition", "spacing") or 3.0),
+            allow_rotation=bool(config.get("imposition", "rotation_allowed")),
+            min_dpi=int(config.get("preflight", "min_dpi") or 300),
+            export_format=export_format,
+            export_dpi=int(config.get("export", "dpi") or 300),
+            generate_thumbnail=True,
+        )
+
     def _submit_job(self, job_name: str, file_paths: list[str]) -> str:
         """Submit a job to the worker pool. Returns the job UUID string."""
         job_id = uuid.uuid4()
         job_id_str = str(job_id)
         self.jobs_view.job_uuid_map[job_id_str] = job_name
 
-        settings = JobSettings(
-            sheet_width_mm=900.0,
-            sheet_height_mm=600.0,
-            gap_mm=3.0,
-            allow_rotation=True,
-            min_dpi=300,
-            generate_thumbnail=True,
-        )
+        settings = self._build_job_settings()
         paths = [Path(f) for f in file_paths if Path(f).exists()]
         self.worker_thread.submit_job(job_id, paths, settings)
         return job_id_str
