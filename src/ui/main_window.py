@@ -62,6 +62,10 @@ class MainWindow(QMainWindow):
         self.worker_thread.job_failed.connect(self.handle_job_failed)
         self.worker_thread.start()
 
+        # Aggregate state per job_name, keyed the same way multiple chunks of
+        # one logical job share a single Jobs-table row. See _submit_job().
+        self._job_group_state: dict[str, dict] = {}
+
     # ExportEngine only implements these formats; other combo entries fall back to PDF/X.
     _EXPORT_FORMAT_MAP = {
         "PDF (STANDARD)": "PDF",
@@ -90,38 +94,70 @@ class MainWindow(QMainWindow):
         )
 
     def _submit_job(self, job_name: str, file_paths: list[str]) -> str:
-        """Submit a job to the worker pool. Returns the job UUID string."""
-        job_id = uuid.uuid4()
-        job_id_str = str(job_id)
-        self.jobs_view.job_uuid_map[job_id_str] = job_name
+        """Submit a job to the worker pool.
 
-        settings = self._build_job_settings()
+        WorkerPoolManager parallelizes at the job level: one process_job_files()
+        call runs entirely on a single worker, regardless of max_workers. A job
+        with thousands of files would therefore run on exactly one CPU core.
+        To actually use the configured worker pool, large batches are split
+        into chunks (automation.max_files_per_job) and dispatched as separate
+        sub-jobs, all aggregated under the single `job_name` row in the Jobs
+        table (see _job_group_state / handle_job_* below).
+
+        Returns the first sub-job's UUID string.
+        """
+        from src.utils.config_manager import ConfigManager
+
         paths = [Path(f) for f in file_paths if Path(f).exists()]
-        self.worker_thread.submit_job(job_id, paths, settings)
-        return job_id_str
+        settings = self._build_job_settings()
+
+        chunk_size = max(1, int(ConfigManager().get("automation", "max_files_per_job") or 50))
+        chunks = [paths[i : i + chunk_size] for i in range(0, len(paths), chunk_size)] or [[]]
+
+        self._job_group_state[job_name] = {
+            "total": len(chunks),
+            "started": 0,
+            "completed": 0,
+            "sheets": 0,
+            "errored": False,
+            "preflight_map": {},
+        }
+
+        job_ids = []
+        for chunk in chunks:
+            job_id = uuid.uuid4()
+            job_id_str = str(job_id)
+            self.jobs_view.job_uuid_map[job_id_str] = job_name
+            job_ids.append(job_id_str)
+            self.worker_thread.submit_job(job_id, chunk, settings)
+        return job_ids[0]
 
     def handle_job_started(self, job_id: str):
-        self.status_bar.showMessage(f"Job {job_id[:8]} en cours...")
+        job_name = self.jobs_view.job_uuid_map.get(job_id, job_id[:8])
+        group = self._job_group_state.get(job_name)
         self.jobs_view.update_job_status(job_id, "PROCESSING")
 
-        count = int(self.dashboard_view.card_active_jobs.value_label.text())
-        self.dashboard_view.card_active_jobs.value_label.setText(str(count + 1))
+        # Only count once per logical job, not once per sub-job chunk.
+        if group is None or group["started"] == 0:
+            self.status_bar.showMessage(f"Job {job_name} en cours...")
+            count = int(self.dashboard_view.card_active_jobs.value_label.text())
+            self.dashboard_view.card_active_jobs.value_label.setText(str(count + 1))
+        if group is not None:
+            group["started"] += 1
 
     def handle_job_completed(self, job_id: str, files: list, sheets: list):
         job_name = self.jobs_view.job_uuid_map.get(job_id, job_id[:8])
-        sheet_count = len(sheets)
-        self.status_bar.showMessage(f"Job {job_name} terminé — {sheet_count} planche(s)")
-        self.notifier.notify("Job Terminé", f"{job_name} — {sheet_count} planche(s) générée(s).", False)
-        self.jobs_view.update_job_status(job_id, "DONE", sheet_count)
+        group = self._job_group_state.get(job_name)
 
-        # Store sheet paths for preview
+        # Store sheet paths for preview (accumulated across sub-job chunks)
         sheet_paths = [s.export_path for s in sheets if s.export_path and s.export_path.exists()]
         if sheet_paths:
-            self._job_sheets[job_name] = sheet_paths
+            self._job_sheets.setdefault(job_name, []).extend(sheet_paths)
 
-        # Show preflight warnings if any
+        # Collect preflight warnings, aggregated per logical job so we show
+        # a single dialog at the end instead of one per chunk.
         from src.core.models.domain import PreflightStatus
-        preflight_map = {}
+        preflight_map = group["preflight_map"] if group is not None else {}
         for f in files:
             if f.preflight_status in (PreflightStatus.ERROR, PreflightStatus.WARNING) and f.preflight_errors:
                 preflight_map[f.path.name] = [
@@ -132,21 +168,64 @@ class MainWindow(QMainWindow):
                     }
                     for e in f.preflight_errors
                 ]
+
+        if group is None:
+            self._finalize_job(job_name, job_id, len(sheets), preflight_map, errored=False)
+            return
+
+        group["completed"] += 1
+        group["sheets"] += len(sheets)
+
+        if group["completed"] < group["total"]:
+            # Other chunks still running; reflect progress without finalizing.
+            self.jobs_view.update_job_status(job_id, "PROCESSING", group["sheets"])
+            return
+
+        self._finalize_job(job_name, job_id, group["sheets"], group["preflight_map"], errored=group["errored"])
+        del self._job_group_state[job_name]
+
+    def handle_job_failed(self, job_id: str, error_msg: str):
+        job_name = self.jobs_view.job_uuid_map.get(job_id, job_id[:8])
+        group = self._job_group_state.get(job_name)
+
+        err_count = int(self.dashboard_view.card_errors.value_label.text())
+        self.dashboard_view.card_errors.value_label.setText(str(err_count + 1))
+
+        if group is None:
+            self.status_bar.showMessage(f"Erreur — Job {job_name}")
+            self.notifier.notify("Erreur Job", f"{job_name}: {error_msg}", True)
+            self.jobs_view.update_job_status(job_id, "ERROR")
+            count = int(self.dashboard_view.card_active_jobs.value_label.text())
+            self.dashboard_view.card_active_jobs.value_label.setText(str(max(0, count - 1)))
+            return
+
+        group["errored"] = True
+        group["completed"] += 1
+
+        if group["completed"] < group["total"]:
+            self.jobs_view.update_job_status(job_id, "PROCESSING", group["sheets"])
+            return
+
+        self._finalize_job(job_name, job_id, group["sheets"], group["preflight_map"], errored=True)
+        del self._job_group_state[job_name]
+
+    def _finalize_job(self, job_name: str, job_id: str, sheet_count: int, preflight_map: dict, errored: bool):
+        """Marks a logical job (all its sub-job chunks) as finished: updates
+        the Jobs row, notifies, shows the aggregated preflight dialog once,
+        and updates dashboard counters exactly once per logical job."""
+        status = "ERROR" if errored else "DONE"
+        self.status_bar.showMessage(f"Job {job_name} terminé — {sheet_count} planche(s)")
+        self.notifier.notify("Job Terminé", f"{job_name} — {sheet_count} planche(s) générée(s).", errored)
+        self.jobs_view.update_job_status(job_id, status, sheet_count)
+
         if preflight_map:
             from src.ui.widgets.preflight_report import PreflightDialog
             PreflightDialog(self, preflight_map).exec()
 
-        # Update dashboard
         count = int(self.dashboard_view.card_active_jobs.value_label.text())
         self.dashboard_view.card_active_jobs.value_label.setText(str(max(0, count - 1)))
         sheets_total = int(self.dashboard_view.card_sheets.value_label.text())
         self.dashboard_view.card_sheets.value_label.setText(str(sheets_total + sheet_count))
-
-    def handle_job_failed(self, job_id: str, error_msg: str):
-        job_name = self.jobs_view.job_uuid_map.get(job_id, job_id[:8])
-        self.status_bar.showMessage(f"Erreur — Job {job_name}")
-        self.notifier.notify("Erreur Job", f"{job_name}: {error_msg}", True)
-        self.jobs_view.update_job_status(job_id, "ERROR")
 
         count = int(self.dashboard_view.card_active_jobs.value_label.text())
         self.dashboard_view.card_active_jobs.value_label.setText(str(max(0, count - 1)))

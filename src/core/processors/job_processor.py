@@ -1,4 +1,5 @@
 import logging
+import shutil
 from pathlib import Path
 from typing import List, Tuple
 from uuid import UUID
@@ -30,9 +31,16 @@ def process_job_files(
     """
     from src.utils.config import config
 
+    # All per-job intermediate artifacts (corrected files, base sheet PDFs) are
+    # confined to this job-scoped subfolder, never written loose into
+    # processing_dir's root. MainWindow.recover_orphan_jobs() scans that root
+    # for crash-recovery and would otherwise pick up our own temp files as
+    # brand-new "orphan" jobs, reprocessing them endlessly on every restart.
+    job_temp_dir = config.processing_dir / str(job_id)
+
     import_engine = ImportEngine()
     preflight_engine = PreflightEngine()
-    correction_engine = CorrectionEngine(settings, config.processing_dir)
+    correction_engine = CorrectionEngine(settings, job_temp_dir)
 
     processed_items = []
 
@@ -86,10 +94,8 @@ def process_job_files(
         layout_engine = LayoutEngine()
         export_engine = ExportEngine()
         try:
-            # We use processing_dir for the temporary base PDF
-            job_temp_dir = config.processing_dir / str(job_id)
             sheets = layout_engine.process_job_layout(job_id, sheets, settings, job_temp_dir)
-            
+
             # 6. Export (Converts to PDF/X, TIFF, or JPEG based on settings)
             job_output_dir = config.output_dir / str(job_id)
             for sheet in sheets:
@@ -103,7 +109,15 @@ def process_job_files(
                     )
                     # Update export_path to the final output file
                     sheet.export_path = final_path
+
+            # Intermediate artifacts (corrected files, base sheet PDFs) have
+            # been consumed into job_output_dir; safe to discard.
+            shutil.rmtree(job_temp_dir, ignore_errors=True)
         except Exception as e:
             logger.exception(f"Fatal error during layout or export generation: {e}")
+    else:
+        # No sheets produced (e.g. nesting failed), but CorrectionEngine may
+        # still have written files into job_temp_dir — clean those up too.
+        shutil.rmtree(job_temp_dir, ignore_errors=True)
 
     return processed_items, sheets
