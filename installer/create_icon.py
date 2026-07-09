@@ -48,14 +48,16 @@ def draw_icon(size: int) -> Image.Image:
 
 
 def main():
-    frames = [draw_icon(s) for s in SIZES]
-    frames[0].save(
+    # Render at the largest size and let Pillow downscale for each requested
+    # size; passing pre-rendered append_images here silently drops all but
+    # the base frame in this Pillow version.
+    base = draw_icon(max(SIZES))
+    base.save(
         OUTPUT,
         format="ICO",
         sizes=[(s, s) for s in SIZES],
-        append_images=frames[1:],
     )
-    print(f"Icone générée : {OUTPUT}")
+    print(f"Icone generee : {OUTPUT}")
 
 
 if __name__ == "__main__":

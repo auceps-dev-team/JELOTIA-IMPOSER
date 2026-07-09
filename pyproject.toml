@@ -52,6 +52,7 @@ target-version = ['py312']
 dev = [
     "black>=26.5.1",
     "mypy>=2.1.0",
+    "pyinstaller>=6.21.0",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "ruff>=0.15.20",

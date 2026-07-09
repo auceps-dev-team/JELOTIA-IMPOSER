@@ -6,9 +6,9 @@
         "logs": ""
     },
     "imposition": {
-        "sheet_width": 320,
-        "sheet_height": 450,
-        "spacing": 5,
+        "sheet_width": 550,
+        "sheet_height": 890,
+        "spacing": 3,
         "rotation_allowed": true
     },
     "preflight": {
@@ -16,7 +16,7 @@
         "allowed_formats": "A4, A5, B2"
     },
     "export": {
-        "format": "TIFF",
+        "format": "PDF (Standard)",
         "resolution": 300,
         "icc_profile": "Coated FOGRA39",
         "dpi": 300

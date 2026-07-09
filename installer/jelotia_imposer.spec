@@ -39,7 +39,7 @@ hidden_imports = [
 
 a = Analysis(
     ["../main.py"],
-    pathex=[str(Path(__file__).parent.parent)],
+    pathex=[str(Path(SPECPATH).parent)],
     binaries=[],
     datas=[
         ("../config.json", "."),
