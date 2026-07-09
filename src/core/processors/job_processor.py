@@ -1,7 +1,7 @@
 import logging
 import shutil
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional
 from uuid import UUID
 
 from src.core.engines.correction_engine import CorrectionEngine
@@ -14,31 +14,32 @@ logger = logging.getLogger(__name__)
 
 
 def process_job_files(
-    job_id: UUID, file_paths: List[Path], settings: JobSettings, job_name: str = None
-) -> Tuple[List[FileItem], List[Sheet]]:
+    job_id: UUID, file_paths: List[Path], settings: JobSettings
+) -> List[FileItem]:
     """
-    Processes a list of file paths for a single job.
+    Processes a list of file paths for a single job (or a chunk of one — see
+    finalize_job_sheets for why nesting is deliberately NOT done here).
     Executes Import -> Preflight -> Correction sequentially for each file.
     Designed to run inside an isolated process (Worker).
 
     Args:
-        job_id (UUID): The ID of the Job.
+        job_id (UUID): The ID of the (logical) Job. Large jobs are split into
+            chunks dispatched to different workers, but all chunks of one
+            logical job share this same job_id, so their corrected files land
+            in the same job_temp_dir for finalize_job_sheets to pick up.
         file_paths (List[Path]): The raw files to process.
         settings (JobSettings): The settings associated with the Job.
-        job_name (str, optional): Human-readable job name, used to build
-            readable export filenames (see ExportEngine.export_sheet). Falls
-            back to a short job_id when not provided.
 
     Returns:
         List[FileItem]: The fully processed FileItems.
     """
     from src.utils.config import config
 
-    # All per-job intermediate artifacts (corrected files, base sheet PDFs) are
-    # confined to this job-scoped subfolder, never written loose into
-    # processing_dir's root. MainWindow.recover_orphan_jobs() scans that root
-    # for crash-recovery and would otherwise pick up our own temp files as
-    # brand-new "orphan" jobs, reprocessing them endlessly on every restart.
+    # All per-job intermediate artifacts (corrected files) are confined to
+    # this job-scoped subfolder, never written loose into processing_dir's
+    # root. MainWindow.recover_orphan_jobs() scans that root for crash-recovery
+    # and would otherwise pick up our own temp files as brand-new "orphan"
+    # jobs, reprocessing them endlessly on every restart.
     job_temp_dir = config.processing_dir / str(job_id)
 
     import_engine = ImportEngine()
@@ -81,16 +82,37 @@ def process_job_files(
             # (Note: ImportEngine already does this, but we wrap just in case)
             pass
 
-    # 4. Nesting (Places corrected files on sheets)
+    return processed_items
+
+
+def finalize_job_sheets(
+    job_id: UUID, file_items: List[FileItem], settings: JobSettings, job_name: Optional[str] = None
+) -> List[Sheet]:
+    """
+    Nests, lays out and exports the sheets for a whole logical job in one
+    shot, from the combined FileItems of every chunk. Nesting needs the
+    complete file set to pack sheets well — running it once per chunk (as a
+    naive per-worker pipeline would) makes each chunk fill its own sheet
+    independently, drastically under-using the sheet whenever a job is split
+    into chunks (automation.max_files_per_job): e.g. a 200-file job split into
+    4 chunks of 50 would produce 4 sparsely-filled sheets instead of combining
+    all 200 files into however many sheets are actually needed.
+
+    Designed to run inside an isolated process (Worker), once per logical job
+    after all of its chunks' process_job_files() calls have completed.
+    """
+    from src.utils.config import config
+
+    job_temp_dir = config.processing_dir / str(job_id)
+
     nesting_engine = NestingEngine(ShelfNestingStrategy())
-    sheets = []
+    sheets: List[Sheet] = []
     try:
-        sheets = nesting_engine.process(processed_items, settings)
+        sheets = nesting_engine.process(file_items, settings)
     except Exception as e:
         logger.exception(f"Fatal error during nesting: {e}")
-        # Note: we still return processed_items even if nesting fails
+        # Note: we still return whatever we have (empty) even if nesting fails
 
-    # 5. Layout (Generates PDF for sheets)
     if sheets:
         from src.core.engines.export_engine import ExportEngine
         from src.core.engines.layout_engine import LayoutEngine
@@ -99,7 +121,7 @@ def process_job_files(
         try:
             sheets = layout_engine.process_job_layout(job_id, sheets, settings, job_temp_dir)
 
-            # 6. Export (Converts to PDF/X, TIFF, or JPEG based on settings)
+            # Export (Converts to PDF/X, TIFF, or JPEG based on settings)
             job_output_dir = config.output_dir / str(job_id)
             for sheet in sheets:
                 if sheet.export_path and sheet.export_path.exists():
@@ -113,15 +135,11 @@ def process_job_files(
                     )
                     # Update export_path to the final output file
                     sheet.export_path = final_path
-
-            # Intermediate artifacts (corrected files, base sheet PDFs) have
-            # been consumed into job_output_dir; safe to discard.
-            shutil.rmtree(job_temp_dir, ignore_errors=True)
         except Exception as e:
             logger.exception(f"Fatal error during layout or export generation: {e}")
-    else:
-        # No sheets produced (e.g. nesting failed), but CorrectionEngine may
-        # still have written files into job_temp_dir — clean those up too.
-        shutil.rmtree(job_temp_dir, ignore_errors=True)
 
-    return processed_items, sheets
+    # Intermediate artifacts (corrected files from every chunk, base sheet
+    # PDFs) have been consumed into job_output_dir; safe to discard.
+    shutil.rmtree(job_temp_dir, ignore_errors=True)
+
+    return sheets

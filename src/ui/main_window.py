@@ -65,6 +65,8 @@ class MainWindow(QMainWindow):
         self.worker_thread.job_started.connect(self.handle_job_started)
         self.worker_thread.job_completed.connect(self.handle_job_completed)
         self.worker_thread.job_failed.connect(self.handle_job_failed)
+        self.worker_thread.finalize_completed.connect(self.handle_finalize_completed)
+        self.worker_thread.finalize_failed.connect(self.handle_finalize_failed)
         self.worker_thread.start()
 
         # Aggregate state per job_name, keyed the same way multiple chunks of
@@ -109,7 +111,13 @@ class MainWindow(QMainWindow):
         sub-jobs, all aggregated under the single `job_name` row in the Jobs
         table (see _job_group_state / handle_job_* below).
 
-        Returns the first sub-job's UUID string.
+        All chunks share the SAME job_id (rather than each getting its own):
+        nesting needs every chunk's files combined to pack sheets well (see
+        job_processor.finalize_job_sheets), so once every chunk completes we
+        submit one finalize step for the whole logical job, keyed by this
+        shared id, instead of nesting each chunk's files independently.
+
+        Returns the shared job UUID string.
         """
         from src.utils.config_manager import ConfigManager
 
@@ -120,23 +128,23 @@ class MainWindow(QMainWindow):
         chunk_size = max(1, int(ConfigManager().get("automation", "max_files_per_job") or 50))
         chunks = [paths[i : i + chunk_size] for i in range(0, len(paths), chunk_size)] or [[]]
 
+        job_id = uuid.uuid4()
+        job_id_str = str(job_id)
+        self.jobs_view.job_uuid_map[job_id_str] = job_name
+
         self._job_group_state[job_name] = {
+            "job_id": job_id,
             "total": len(chunks),
             "started": 0,
             "completed": 0,
-            "sheets": 0,
+            "file_items": [],
             "errored": False,
             "preflight_map": {},
         }
 
-        job_ids = []
         for chunk in chunks:
-            job_id = uuid.uuid4()
-            job_id_str = str(job_id)
-            self.jobs_view.job_uuid_map[job_id_str] = job_name
-            job_ids.append(job_id_str)
-            self.worker_thread.submit_job(job_id, chunk, settings, job_name)
-        return job_ids[0]
+            self.worker_thread.submit_job(job_id, chunk, settings)
+        return job_id_str
 
     def handle_job_started(self, job_id: str):
         job_name = self.jobs_view.job_uuid_map.get(job_id, job_id[:8])
@@ -151,14 +159,12 @@ class MainWindow(QMainWindow):
         if group is not None:
             group["started"] += 1
 
-    def handle_job_completed(self, job_id: str, files: list, sheets: list):
+    def handle_job_completed(self, job_id: str, files: list):
+        """A single chunk's import/preflight/correction finished. Accumulates
+        its FileItems; once every chunk of the logical job is done, submits
+        one finalize step (nesting/layout/export) for all of them combined."""
         job_name = self.jobs_view.job_uuid_map.get(job_id, job_id[:8])
         group = self._job_group_state.get(job_name)
-
-        # Store full Sheet objects for preview/editing (accumulated across sub-job chunks)
-        valid_sheets = [s for s in sheets if s.export_path and s.export_path.exists()]
-        if valid_sheets:
-            self._job_sheets.setdefault(job_name, []).extend(valid_sheets)
 
         # Collect preflight warnings, aggregated per logical job so we show
         # a single dialog at the end instead of one per chunk.
@@ -176,19 +182,20 @@ class MainWindow(QMainWindow):
                 ]
 
         if group is None:
-            self._finalize_job(job_name, job_id, len(sheets), preflight_map, errored=False)
+            # No group state (shouldn't normally happen — every submit_job
+            # goes through _submit_job); finalize immediately with just these files.
+            self.worker_thread.submit_finalize(uuid.UUID(job_id), files, self._build_job_settings(), job_name)
             return
 
+        group["file_items"].extend(files)
         group["completed"] += 1
-        group["sheets"] += len(sheets)
 
         if group["completed"] < group["total"]:
             # Other chunks still running; reflect progress without finalizing.
-            self.jobs_view.update_job_status(job_id, "PROCESSING", group["sheets"])
+            self.jobs_view.update_job_status(job_id, "PROCESSING")
             return
 
-        self._finalize_job(job_name, job_id, group["sheets"], group["preflight_map"], errored=group["errored"])
-        del self._job_group_state[job_name]
+        self._dispatch_finalize(job_name, group)
 
     def handle_job_failed(self, job_id: str, error_msg: str):
         job_name = self.jobs_view.job_uuid_map.get(job_id, job_id[:8])
@@ -209,11 +216,49 @@ class MainWindow(QMainWindow):
         group["completed"] += 1
 
         if group["completed"] < group["total"]:
-            self.jobs_view.update_job_status(job_id, "PROCESSING", group["sheets"])
+            self.jobs_view.update_job_status(job_id, "PROCESSING")
             return
 
-        self._finalize_job(job_name, job_id, group["sheets"], group["preflight_map"], errored=True)
-        del self._job_group_state[job_name]
+        self._dispatch_finalize(job_name, group)
+
+    def _dispatch_finalize(self, job_name: str, group: dict):
+        """All chunks of this logical job are done — submit the combined
+        FileItems for nesting/layout/export as a single finalize step."""
+        if not group["file_items"]:
+            # Nothing to nest (every chunk failed, or produced no files).
+            self._finalize_job(job_name, str(group["job_id"]), 0, group["preflight_map"], errored=True)
+            del self._job_group_state[job_name]
+            return
+
+        settings = self._job_settings.get(job_name) or self._build_job_settings()
+        self.jobs_view.update_job_status(str(group["job_id"]), "PROCESSING")
+        self.worker_thread.submit_finalize(group["job_id"], group["file_items"], settings, job_name)
+
+    def handle_finalize_completed(self, job_id: str, sheets: list):
+        job_name = self.jobs_view.job_uuid_map.get(job_id, job_id[:8])
+        group = self._job_group_state.get(job_name)
+
+        valid_sheets = [s for s in sheets if s.export_path and s.export_path.exists()]
+        if valid_sheets:
+            self._job_sheets[job_name] = valid_sheets
+
+        preflight_map = group["preflight_map"] if group is not None else {}
+        errored = group["errored"] if group is not None else False
+        self._finalize_job(job_name, job_id, len(sheets), preflight_map, errored=errored)
+
+        if group is not None:
+            del self._job_group_state[job_name]
+
+    def handle_finalize_failed(self, job_id: str, error_msg: str):
+        job_name = self.jobs_view.job_uuid_map.get(job_id, job_id[:8])
+        group = self._job_group_state.get(job_name)
+
+        self.notifier.notify("Erreur Job", f"{job_name}: {error_msg}", True)
+        preflight_map = group["preflight_map"] if group is not None else {}
+        self._finalize_job(job_name, job_id, 0, preflight_map, errored=True)
+
+        if group is not None:
+            del self._job_group_state[job_name]
 
     def _finalize_job(self, job_name: str, job_id: str, sheet_count: int, preflight_map: dict, errored: bool):
         """Marks a logical job (all its sub-job chunks) as finished: updates

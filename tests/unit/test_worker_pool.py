@@ -28,12 +28,12 @@ def temp_pdf(tmp_path):
 @pytest.mark.asyncio
 async def test_worker_pool_dispatch(temp_pdf, mock_job_settings):
     """
-    Tests that WorkerPoolManager can process a job with an actual file asynchronously.
+    Tests that WorkerPoolManager can process a chunk with an actual file
+    asynchronously. Nesting/layout/export no longer happen here — see
+    test_worker_pool_finalize_dispatch for that step.
     """
-    # Create the worker pool manager
     manager = WorkerPoolManager(max_workers=2)
 
-    # We will use a future to track when the callback is called
     callback_called = asyncio.Future()
 
     def mock_callback(job_id, items, error):
@@ -41,27 +41,62 @@ async def test_worker_pool_dispatch(temp_pdf, mock_job_settings):
             callback_called.set_result((job_id, items, error))
 
     manager.on_job_completed = mock_callback
-
-    # Start the manager
     manager.start()
 
-    # Submit a job
     test_job_id = uuid4()
     await manager.submit_job(job_id=test_job_id, file_paths=[temp_pdf], settings=mock_job_settings)
 
-    # Wait for the callback with a timeout
     try:
-        job_id, result, error = await asyncio.wait_for(callback_called, timeout=5.0)
+        job_id, items, error = await asyncio.wait_for(callback_called, timeout=5.0)
     finally:
         await manager.stop()
 
     assert error is None
     assert job_id == test_job_id
-
-    items, sheets = result
     assert len(items) == 1
     assert items[0].job_id == test_job_id
     assert items[0].path == temp_pdf
 
-    # Check sheets (it should have generated 1 sheet)
+
+@pytest.mark.asyncio
+async def test_worker_pool_finalize_dispatch(temp_pdf, mock_job_settings):
+    """
+    Tests that WorkerPoolManager can nest/layout/export a logical job's
+    combined FileItems (the finalize step, run once per job after every
+    chunk's process_job_files() has completed).
+    """
+    manager = WorkerPoolManager(max_workers=2)
+
+    process_done = asyncio.Future()
+    finalize_done = asyncio.Future()
+
+    def on_job_completed(job_id, items, error):
+        if not process_done.done():
+            process_done.set_result((job_id, items, error))
+
+    def on_finalize_completed(job_id, sheets, error):
+        if not finalize_done.done():
+            finalize_done.set_result((job_id, sheets, error))
+
+    manager.on_job_completed = on_job_completed
+    manager.on_finalize_completed = on_finalize_completed
+    manager.start()
+
+    test_job_id = uuid4()
+    try:
+        await manager.submit_job(job_id=test_job_id, file_paths=[temp_pdf], settings=mock_job_settings)
+        _, items, error = await asyncio.wait_for(process_done, timeout=5.0)
+        assert error is None
+
+        await manager.submit_finalize_job(
+            job_id=test_job_id, file_items=items, settings=mock_job_settings, job_name="Test Job"
+        )
+        job_id, sheets, error = await asyncio.wait_for(finalize_done, timeout=5.0)
+    finally:
+        await manager.stop()
+
+    assert error is None
+    assert job_id == test_job_id
     assert len(sheets) == 1
+    assert sheets[0].export_path is not None
+    assert sheets[0].export_path.exists()
