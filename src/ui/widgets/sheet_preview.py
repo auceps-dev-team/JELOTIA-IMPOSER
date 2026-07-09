@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QGraphicsScene,
     QGraphicsView,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QMessageBox,
     QPushButton,
@@ -61,7 +62,6 @@ class ZoomableView(QGraphicsView):
 class SheetPreviewWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.current_pdf_path = None
 
         # Multi-sheet job state (see load_job())
         self.job_name: Optional[str] = None
@@ -193,7 +193,6 @@ class SheetPreviewWidget(QWidget):
 
     def load_pdf(self, pdf_path: str, fill_rate: float = 0.0):
         """Loads a PDF page into the view using PyMuPDF."""
-        self.current_pdf_path = pdf_path
         try:
             doc = fitz.open(pdf_path)
             page = doc[0] # Preview first page
@@ -215,36 +214,75 @@ class SheetPreviewWidget(QWidget):
         except Exception as e:
             self.info_label.setText(f"Erreur de chargement: {e}")
 
-    # The final export can be a PDF, TIFF or JPEG depending on the job's export
-    # format — the save dialog must match the *actual* file being copied, not
-    # assume PDF. Forcing a .pdf extension onto a TIFF/JPEG produces a file
-    # that no PDF reader (or browser) can open.
-    _SAVE_FILTERS = {
-        ".pdf": "PDF Files (*.pdf)",
-        ".tiff": "TIFF Files (*.tiff)",
-        ".tif": "TIFF Files (*.tif)",
-        ".jpg": "JPEG Files (*.jpg)",
-        ".jpeg": "JPEG Files (*.jpeg)",
+    # Lets the user pick a target format at export time instead of having to go
+    # change it in Settings first: label -> (export_format for ExportEngine, extension, file filter).
+    _FORMAT_CHOICES = {
+        "PDF": ("PDF", ".pdf", "PDF Files (*.pdf)"),
+        "TIFF": ("TIFF", ".tiff", "TIFF Files (*.tiff)"),
+        "JPEG": ("JPEG", ".jpg", "JPEG Files (*.jpg)"),
     }
 
-    def export_pdf(self):
-        if not self.current_pdf_path:
-            return
-        src_path = Path(self.current_pdf_path)
-        ext = src_path.suffix.lower() or ".pdf"
-        file_filter = self._SAVE_FILTERS.get(ext, f"Files (*{ext})")
+    def _default_format_label(self, sheet: Sheet) -> str:
+        ext = Path(sheet.export_path).suffix.lower() if sheet.export_path else ".pdf"
+        return {".pdf": "PDF", ".tiff": "TIFF", ".tif": "TIFF", ".jpg": "JPEG", ".jpeg": "JPEG"}.get(ext, "PDF")
 
-        save_path, _ = QFileDialog.getSaveFileName(
-            self, "Exporter la planche", src_path.name, file_filter
+    def export_pdf(self):
+        sheet = self.current_sheet
+        if sheet is None or self.settings is None:
+            return
+
+        labels = list(self._FORMAT_CHOICES.keys())
+        default_index = labels.index(self._default_format_label(sheet))
+        choice, ok = QInputDialog.getItem(
+            self, "Exporter la planche", "Format d'export :", labels, default_index, False
         )
-        if save_path:
-            save_path = str(Path(save_path).with_suffix(ext)) if Path(save_path).suffix.lower() != ext else save_path
+        if not ok:
+            return
+
+        fmt, ext, file_filter = self._FORMAT_CHOICES[choice]
+        if fmt == "PDF":
+            # Keep the job's existing PDF flavor (PDF/X-1a, PDF/X-4, ...) if it
+            # already is one, instead of downgrading to a plain "PDF" export.
+            current = self.settings.export_format.upper()
+            fmt = self.settings.export_format if "PDF" in current else "PDF/X-4"
+
+        from src.core.engines.export_engine import _slugify
+
+        base_name = _slugify(self.job_name) if self.job_name else str(sheet.job_id)[:8]
+        default_name = f"{base_name}_planche_{sheet.sheet_number:02d}{ext}"
+
+        save_path, _ = QFileDialog.getSaveFileName(self, "Exporter la planche", default_name, file_filter)
+        if not save_path:
+            return
+        if Path(save_path).suffix.lower() != ext:
+            save_path = str(Path(save_path).with_suffix(ext))
+
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        staging_dir = None
+        try:
+            from src.core.sheet_export_service import SheetExportService
+            from src.utils.config import config
+
+            staging_dir = config.processing_dir / f"quick_export_{sheet.id}"
+            output_dir = staging_dir / "out"
+            work_dir = staging_dir / "work"
+
+            service = SheetExportService()
+            results = service.regenerate_and_export(
+                sheet, self.settings, [fmt], output_dir, work_dir, job_name=self.job_name
+            )
+            generated_path = results[fmt]
+
             import shutil
-            try:
-                shutil.copy2(self.current_pdf_path, save_path)
-                QMessageBox.information(self, "Succès", f"Planche exportée vers {save_path}")
-            except Exception as e:
-                QMessageBox.warning(self, "Erreur", f"Erreur lors de l'exportation: {e}")
+            shutil.copy2(generated_path, save_path)
+            QMessageBox.information(self, "Succès", f"Planche exportée vers {save_path}")
+        except Exception as e:
+            QMessageBox.warning(self, "Erreur", f"Erreur lors de l'exportation : {e}")
+        finally:
+            QApplication.restoreOverrideCursor()
+            if staging_dir is not None:
+                import shutil
+                shutil.rmtree(staging_dir, ignore_errors=True)
 
     # ------------------------------------------------------------------ #
     #  Grouped multi-format export                                        #
