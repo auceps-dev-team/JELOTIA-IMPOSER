@@ -6,6 +6,9 @@ dist/
 wheels/
 *.egg-info
 
+# Compiled Inno Setup installer output
+installer/output/
+
 # Virtual environments
 .venv
 
