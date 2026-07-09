@@ -46,9 +46,9 @@ Name: "startmenu";    Description: "Créer un raccourci dans le menu Démarrer";
 Source: "{#BuildDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\{#AppName}";         Filename: "{app}\{#AppExeName}"; IconFilename: "{app}\jelotia.ico"
+Name: "{group}\{#AppName}";         Filename: "{app}\{#AppExeName}"; IconFilename: "{app}\_internal\jelotia.ico"
 Name: "{group}\Désinstaller {#AppName}"; Filename: "{uninstallexe}"
-Name: "{commondesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; IconFilename: "{app}\jelotia.ico"; Tasks: desktopicon
+Name: "{commondesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; IconFilename: "{app}\_internal\jelotia.ico"; Tasks: desktopicon
 
 [Dirs]
 ; Créer les dossiers de travail au niveau utilisateur

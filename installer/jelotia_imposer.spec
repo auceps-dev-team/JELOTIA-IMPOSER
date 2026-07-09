@@ -44,6 +44,7 @@ a = Analysis(
     datas=[
         ("../config.json", "."),
         ("../src/database/migrations", "src/database/migrations"),
+        ("jelotia.ico", "."),
     ],
     hiddenimports=hidden_imports,
     hookspath=[],

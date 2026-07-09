@@ -23,11 +23,26 @@ from src.ui.widgets.job_queue import JobsWidget
 from src.ui.widgets.settings_view import SettingsWidget
 
 
+def _resolve_app_icon() -> Path | None:
+    """Locates jelotia.ico whether running from source (installer/jelotia.ico)
+    or as a frozen PyInstaller build (bundled at the root of sys._MEIPASS via
+    the spec file's datas entry)."""
+    if getattr(sys, "frozen", False):
+        base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+        candidate = base / "jelotia.ico"
+    else:
+        candidate = Path(__file__).resolve().parents[2] / "installer" / "jelotia.ico"
+    return candidate if candidate.exists() else None
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("JELOTIA IMPOSER")
         self.resize(1200, 800)
+        icon_path = _resolve_app_icon()
+        if icon_path:
+            self.setWindowIcon(QIcon(str(icon_path)))
 
         # Stores job_name → the full Sheet objects (with PlacedItem layout data),
         # accumulated across sub-job chunks. Needed for preview navigation,
@@ -384,7 +399,8 @@ class MainWindow(QMainWindow):
     def setup_system_tray(self):
         if not QSystemTrayIcon.isSystemTrayAvailable():
             return
-        self.tray_icon = QSystemTrayIcon(QIcon(), self)
+        icon_path = _resolve_app_icon()
+        self.tray_icon = QSystemTrayIcon(QIcon(str(icon_path)) if icon_path else QIcon(), self)
         self.tray_menu = QMenu()
         self.tray_menu.addAction("Afficher").triggered.connect(self.showNormal)
         self.tray_menu.addSeparator()

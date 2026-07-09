@@ -101,6 +101,54 @@ def test_process_corrupted(dummy_corrupted):
     assert item.preflight_errors[0].is_blocking is True
 
 
+@pytest.fixture
+def vector_rgb_pdf(test_files_dir):
+    """A PDF with only vector content filled in DeviceRGB — no embedded raster
+    image at all, so get_image_info() alone can never see it."""
+    path = test_files_dir / "vector_rgb.pdf"
+    doc = fitz.open()
+    page = doc.new_page(width=200, height=200)
+    page.draw_rect(fitz.Rect(20, 20, 180, 180), color=(1, 0, 0), fill=(1, 0, 0))
+    doc.save(str(path))
+    doc.close()
+    return path
+
+
+@pytest.fixture
+def vector_cmyk_pdf(test_files_dir):
+    """A PDF with only vector content filled in DeviceCMYK (k/K operators)."""
+    path = test_files_dir / "vector_cmyk.pdf"
+    doc = fitz.open()
+    page = doc.new_page(width=200, height=200)
+    shape = page.new_shape()
+    shape.draw_rect(fitz.Rect(20, 20, 180, 180))
+    shape.finish(fill=(0, 1, 1, 0), color=(0, 1, 1, 0))
+    shape.commit()
+    doc.save(str(path))
+    doc.close()
+    return path
+
+
+def test_process_pdf_detects_vector_rgb_content(vector_rgb_pdf):
+    """Regression test: vector-only content filled in DeviceRGB (rg/RG
+    operators, no embedded image) must be detected as RGB, not silently
+    default to CMYK."""
+    engine = ImportEngine()
+    items = engine.process_file(uuid4(), vector_rgb_pdf, min_dpi=300)
+
+    assert len(items) == 1
+    assert items[0].color_mode == ColorMode.RGB
+
+
+def test_process_pdf_vector_cmyk_not_flagged_as_rgb(vector_cmyk_pdf):
+    """No false positive: genuine DeviceCMYK vector fills must stay CMYK."""
+    engine = ImportEngine()
+    items = engine.process_file(uuid4(), vector_cmyk_pdf, min_dpi=300)
+
+    assert len(items) == 1
+    assert items[0].color_mode == ColorMode.CMYK
+
+
 def test_process_not_found():
     engine = ImportEngine()
     job_id = uuid4()

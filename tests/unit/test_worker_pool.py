@@ -18,8 +18,11 @@ def temp_pdf(tmp_path):
 
     pdf_path = tmp_path / "test.pdf"
     doc = fitz.open()
-    page = doc.new_page(width=420, height=595)  # A5 roughly
-    page.draw_rect(page.rect, color=(0, 0, 0), fill=(1, 1, 1))
+    # Blank page, no drawing operators — this test is about dispatch plumbing,
+    # not color correction, so keep it free of RGB-filled vector content
+    # (draw_rect(..., color=..., fill=...) emits rg/RG operators, which would
+    # legitimately get flagged and corrected to CMYK by the real pipeline).
+    doc.new_page(width=420, height=595)  # A5 roughly
     doc.save(str(pdf_path))
     doc.close()
     return pdf_path

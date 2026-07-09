@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 from typing import List, Union
 from uuid import UUID
@@ -14,6 +15,11 @@ from src.core.models.domain import (
     PreflightErrorType,
     PreflightStatus,
 )
+
+
+# Matches the PDF content-stream operators that set a DeviceRGB fill/stroke
+# color directly (three numeric operands followed by rg/RG), e.g. "1 0 0 rg".
+_RGB_OPERATOR_RE = re.compile(rb"(?:^|\s)[-\d.]+\s+[-\d.]+\s+[-\d.]+\s+[rR][gG](?=\s|$)")
 
 
 class ImportEngine:
@@ -75,10 +81,14 @@ class ImportEngine:
         return items
 
     def _inspect_page_images(self, page, default_dpi: int) -> tuple:
-        """Inspects embedded raster images on a PDF page to determine the real
-        (worst-case) color mode and effective resolution. Pages with no raster
-        images (pure vector) fall back to CMYK/default_dpi, since there is no
-        source-color or resampling concern for vector content."""
+        """Inspects a PDF page to determine the real (worst-case) color mode
+        and effective resolution: embedded raster images, PLUS the page's own
+        vector content (fills/strokes drawn directly in DeviceRGB). A page
+        with no raster images at all — pure vector shapes/text — used to fall
+        back to CMYK unconditionally, silently missing vector content
+        authored in an RGB workspace (very common: any PDF/design tool
+        exporting with an RGB color profile emits `rg`/`RG` operators for
+        solid fills, with no embedded image involved at all)."""
         color_mode = ColorMode.CMYK
         lowest_dpi = None
 
@@ -103,9 +113,23 @@ class ImportEngine:
                 if lowest_dpi is None or image_dpi < lowest_dpi:
                     lowest_dpi = image_dpi
 
+        if color_mode == ColorMode.CMYK and self._has_direct_rgb_operators(page):
+            color_mode = ColorMode.RGB
+
         if lowest_dpi is None:
             return color_mode, default_dpi
         return color_mode, round(lowest_dpi)
+
+    @staticmethod
+    def _has_direct_rgb_operators(page) -> bool:
+        """True if the page's own content stream sets a DeviceRGB fill/stroke
+        color (rg/RG) anywhere — catches RGB vector content that
+        get_image_info() can't see since it only looks at embedded images."""
+        try:
+            content = page.read_contents()
+        except Exception:
+            return False
+        return bool(content) and bool(_RGB_OPERATOR_RE.search(content))
 
     def _process_image(self, job_id: UUID, file_path: Path) -> List[FileItem]:
         items = []
