@@ -156,25 +156,36 @@ class ShelfNestingStrategy(NestingStrategy):
     that span the sheet; every item in a row sits on the same y and the row's
     height is fixed by the first (tallest) item placed in it. This produces a
     visually uniform, row-aligned layout — unlike MaxRects/Guillotine, which
-    stagger items at irregular offsets — while still trying to minimize wasted
-    space by slotting each item into the existing row that wastes the least
-    vertical space before opening a new row.
+    stagger items at irregular offsets — while still trying to maximize space
+    usage: each item's rotation is decided at placement time (not locked in
+    upfront), so it can flip to whichever orientation lets it join an existing
+    row, and only falls back to "smallest new row" as a tie-break when no
+    existing row fits it in either orientation.
     """
 
     @staticmethod
-    def _orient(width_mm: float, height_mm: float, allow_rotation: bool, sheet_w: float, sheet_h: float):
-        """Returns (w, h, rotated) for the orientation that fits the sheet and
-        yields the smallest height (flatter row = more uniform), or None if the
-        item cannot fit the sheet in any allowed orientation."""
+    def _valid_orientations(width_mm: float, height_mm: float, allow_rotation: bool, sheet_w: float, sheet_h: float):
+        """Returns every (w, h, rotated) orientation that fits the sheet at all
+        (1 or 2 entries), or an empty list if the item can't fit in any."""
         candidates = [(width_mm, height_mm, False)]
-        if allow_rotation:
+        if allow_rotation and height_mm != width_mm:
             candidates.append((height_mm, width_mm, True))
+        return [c for c in candidates if c[0] <= sheet_w and c[1] <= sheet_h]
 
-        fitting = [c for c in candidates if c[0] <= sheet_w and c[1] <= sheet_h]
-        if not fitting:
-            return None
-        fitting.sort(key=lambda c: c[1])
-        return fitting[0]
+    @staticmethod
+    def _grid_capacity(w: float, h: float, gap: float, sheet_w: float, sheet_h: float) -> int:
+        """Estimates how many same-shape items a full sheet could hold at this
+        orientation (simple grid, ignoring the current cursor position). Used
+        to pick a new row's orientation: neither "minimize height" nor
+        "minimize width" is uniformly better — e.g. two items each about half
+        the sheet's width pack best kept wide (2 per row), while wide-but-short
+        cards pack best kept in their natural, wider orientation too (more
+        columns) rather than rotated tall to save height. Estimating overall
+        grid density picks whichever orientation actually favors the sheet's
+        proportions."""
+        cols = max(1, int((sheet_w + gap) // (w + gap)))
+        rows = max(1, int((sheet_h + gap) // (h + gap)))
+        return cols * rows
 
     def pack(self, items: List[FileItem], settings: JobSettings) -> List[Sheet]:
         if not items:
@@ -188,13 +199,14 @@ class ShelfNestingStrategy(NestingStrategy):
         rects = []
         skipped = 0
         for item in items:
-            oriented = self._orient(item.width_mm, item.height_mm, settings.allow_rotation, sheet_w, sheet_h)
-            if oriented is None:
+            orientations = self._valid_orientations(
+                item.width_mm, item.height_mm, settings.allow_rotation, sheet_w, sheet_h
+            )
+            if not orientations:
                 skipped += item.quantity
                 continue
-            w, h, rotated = oriented
             for _ in range(item.quantity):
-                rects.append({"item": item, "w": w, "h": h, "rotated": rotated})
+                rects.append({"item": item, "orientations": orientations})
 
         total_elements = sum(item.quantity for item in items)
         if skipped:
@@ -203,9 +215,10 @@ class ShelfNestingStrategy(NestingStrategy):
                 f"({skipped} too large for the sheet in any orientation)."
             )
 
-        # Decreasing Height: tallest items placed first, so each new shelf's
-        # fixed height is set by the tallest item that will ever need it.
-        rects.sort(key=lambda r: r["h"], reverse=True)
+        # Decreasing Height: tallest items placed first (using each item's
+        # tallest available orientation), so each new shelf's fixed height is
+        # set by the tallest item that will ever need it.
+        rects.sort(key=lambda r: max(o[1] for o in r["orientations"]), reverse=True)
 
         sheets: List[Sheet] = []
         shelves: List[dict] = []
@@ -233,32 +246,42 @@ class ShelfNestingStrategy(NestingStrategy):
         open_sheet()
 
         for r in rects:
-            w, h = r["w"], r["h"]
-
-            best, best_waste = None, None
+            # Best-fit across every existing shelf AND every valid orientation:
+            # an item can rotate specifically to slot into a row it wouldn't
+            # otherwise fit, instead of always claiming a fresh row.
+            best = None  # (shelf, w, h, rotated, waste)
             for shelf in shelves:
-                x = shelf["used_width"] + (gap if shelf["used_width"] > 0 else 0.0)
-                if x + w <= sheet_w and h <= shelf["height"]:
-                    waste = shelf["height"] - h
-                    if best_waste is None or waste < best_waste:
-                        best, best_waste = shelf, waste
+                base_x = shelf["used_width"] + (gap if shelf["used_width"] > 0 else 0.0)
+                for w, h, rotated in r["orientations"]:
+                    if base_x + w <= sheet_w and h <= shelf["height"]:
+                        waste = shelf["height"] - h
+                        if best is None or waste < best[4]:
+                            best = (shelf, w, h, rotated, waste)
 
             if best is None:
-                best = open_shelf(h)
+                # No existing shelf works in any orientation — open a new one,
+                # in whichever orientation packs this shape most densely
+                # against the sheet's actual proportions (see _grid_capacity).
+                w, h, rotated = max(
+                    r["orientations"], key=lambda o: self._grid_capacity(o[0], o[1], gap, sheet_w, sheet_h)
+                )
+                shelf = open_shelf(h)
+            else:
+                shelf, w, h, rotated, _ = best
 
-            x = best["used_width"] + (gap if best["used_width"] > 0 else 0.0)
+            x = shelf["used_width"] + (gap if shelf["used_width"] > 0 else 0.0)
             sheets[-1].items.append(
                 PlacedItem(
                     file_item_id=r["item"].id,
                     source_path=r["item"].path,
                     x_mm=x,
-                    y_mm=best["y"],
+                    y_mm=shelf["y"],
                     width_mm=w,
                     height_mm=h,
-                    rotated=r["rotated"],
+                    rotated=rotated,
                 )
             )
-            best["used_width"] = x + w
+            shelf["used_width"] = x + w
 
         sheet_area = sheet_w * sheet_h
         for s in sheets:

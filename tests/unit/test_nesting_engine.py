@@ -273,6 +273,48 @@ def test_shelf_too_large_item_skipped(caplog):
     assert "Could not pack all items" in caplog.text
 
 
+def test_shelf_new_row_orientation_maximizes_density_not_just_min_height():
+    """Regression test: two items each ~half the sheet's width should end up
+    side by side on one sheet (like MaxRects), not stranded one-per-sheet.
+
+    Naively minimizing height when opening a new row forces the first item
+    into whatever orientation is widest, which can eat the row's remaining
+    width and block a second same-sized item from ever joining it — even
+    though both would clearly fit side by side in their natural orientation.
+    """
+    settings = JobSettings(
+        sheet_width_mm=900.0, sheet_height_mm=600.0, gap_mm=3.0, allow_rotation=True
+    )
+    # 420x594mm poster: unrotated leaves two per row (2*420+gap=843<=900);
+    # rotated (594x420) would only leave room for one per row.
+    items = [create_mock_file(420.0, 594.0, quantity=2)]
+
+    sheets = ShelfNestingStrategy().pack(items, settings)
+
+    assert len(sheets) == 1, "both posters should fit on a single sheet, side by side"
+    assert len(sheets[0].items) == 2
+    for it in sheets[0].items:
+        assert it.rotated is False
+    assert sheets[0].fill_rate > 90.0
+
+
+def test_shelf_new_row_orientation_prefers_natural_fit_for_wide_items():
+    """A wide-but-short item (like a business card) should keep its natural
+    orientation (more columns per row) rather than rotate to minimize row
+    height, which would reduce the number of rows that fit and waste space."""
+    settings = JobSettings(
+        sheet_width_mm=900.0, sheet_height_mm=600.0, gap_mm=3.0, allow_rotation=True
+    )
+    items = [create_mock_file(85.0, 55.0, quantity=100)]
+
+    sheets = ShelfNestingStrategy().pack(items, settings)
+
+    assert len(sheets) == 1
+    assert len(sheets[0].items) == 100
+    assert all(not it.rotated for it in sheets[0].items)
+    assert sheets[0].fill_rate >= 85.0
+
+
 def test_shelf_rotation_used_when_beneficial():
     settings = JobSettings(
         sheet_width_mm=100.0, sheet_height_mm=50.0, gap_mm=0.0, allow_rotation=True

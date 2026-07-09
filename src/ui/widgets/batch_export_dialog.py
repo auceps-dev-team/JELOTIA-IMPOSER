@@ -118,10 +118,9 @@ class BatchExportDialog(QDialog):
             progress.setValue(i)
             progress.setLabelText(f"Planche {sheet.sheet_number}...")
 
-            work_dir = config.processing_dir / f"batch_export_{sheet.id}"
             try:
-                results = service.regenerate_and_export(
-                    sheet, self.settings, formats, dest, work_dir, job_name=self.job_name
+                results = service.convert_and_export(
+                    sheet, self.settings, formats, dest, job_name=self.job_name
                 )
                 produced += len(results)
             except Exception as e:

@@ -264,12 +264,10 @@ class SheetPreviewWidget(QWidget):
             from src.utils.config import config
 
             staging_dir = config.processing_dir / f"quick_export_{sheet.id}"
-            output_dir = staging_dir / "out"
-            work_dir = staging_dir / "work"
 
             service = SheetExportService()
-            results = service.regenerate_and_export(
-                sheet, self.settings, [fmt], output_dir, work_dir, job_name=self.job_name
+            results = service.convert_and_export(
+                sheet, self.settings, [fmt], staging_dir, job_name=self.job_name
             )
             generated_path = results[fmt]
 

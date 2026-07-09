@@ -1,7 +1,10 @@
 import logging
+import os
 import re
+import tempfile
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 from uuid import UUID
 
 import fitz  # PyMuPDF
@@ -9,6 +12,8 @@ import pikepdf
 from PIL import Image
 
 from src.core.models.domain import JobSettings, Sheet
+
+_RASTER_EXTS = {".tiff", ".tif", ".jpg", ".jpeg"}
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +70,77 @@ class ExportEngine:
         except Exception as e:
             logger.error(f"Error during export of {base_pdf_path} to {fmt}: {e}")
             raise
+
+    def convert_existing(
+        self,
+        job_id: UUID,
+        sheet: Sheet,
+        existing_path: Path,
+        settings: JobSettings,
+        output_dir: Path,
+        job_name: Optional[str] = None,
+    ) -> Path:
+        """
+        Converts an already-rendered sheet export (PDF, TIFF or JPEG) to the
+        format in `settings.export_format`, without touching the original
+        artwork. Use this instead of re-stamping from PlacedItem source files
+        when the layout hasn't changed (grouped export, quick format export) —
+        those source files are often ephemeral (deleted once the job's own
+        export completes) while `existing_path` (the job's own output) is not.
+        """
+        fmt = settings.export_format.upper()
+        existing_is_raster = existing_path.suffix.lower() in _RASTER_EXTS
+
+        if existing_is_raster and fmt in ("TIFF", "JPEG"):
+            return self._convert_raster_to_raster(sheet, existing_path, settings, output_dir, job_name)
+
+        wrapped_pdf = None
+        try:
+            base_pdf_path = existing_path
+            if existing_is_raster:
+                wrapped_pdf = self._wrap_raster_as_pdf(existing_path, sheet)
+                base_pdf_path = wrapped_pdf
+            return self.export_sheet(job_id, sheet, base_pdf_path, settings, output_dir, job_name=job_name)
+        finally:
+            if wrapped_pdf is not None:
+                wrapped_pdf.unlink(missing_ok=True)
+
+    def _convert_raster_to_raster(
+        self, sheet: Sheet, existing_path: Path, settings: JobSettings, output_dir: Path, job_name: Optional[str]
+    ) -> Path:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        fmt = settings.export_format.upper()
+        ext = ".tiff" if fmt == "TIFF" else ".jpg"
+        base_name = _slugify(job_name) if job_name else str(sheet.job_id)[:8]
+        final_path = output_dir / f"{base_name}_planche_{sheet.sheet_number:02d}{ext}"
+
+        with Image.open(existing_path) as img:
+            if img.mode != "CMYK":
+                img = img.convert("CMYK")
+            dpi = (settings.export_dpi, settings.export_dpi)
+            if fmt == "TIFF":
+                img.save(final_path, format="TIFF", compression="tiff_lzw", dpi=dpi)
+            else:
+                img.save(final_path, format="JPEG", quality=95, dpi=dpi)
+
+        logger.info(f"Converted {existing_path.name} -> {fmt} at {final_path}")
+        return final_path
+
+    def _wrap_raster_as_pdf(self, image_path: Path, sheet: Sheet) -> Path:
+        """Embeds a raster image (TIFF/JPEG) into a minimal one-page PDF sized
+        to the sheet, so the rest of the pipeline (PDF/X metadata, rasterization
+        to another format) can operate uniformly regardless of the original
+        export format."""
+        doc = fitz.open()
+        page = doc.new_page(width=sheet.width_mm * 2.83465, height=sheet.height_mm * 2.83465)
+        page.insert_image(page.rect, filename=str(image_path))
+
+        fd, tmp_name = tempfile.mkstemp(suffix=".pdf", prefix="wrapped_")
+        os.close(fd)
+        tmp_path = Path(tmp_name)
+        doc.save(str(tmp_path))
+        doc.close()
+        return tmp_path
 
     def _export_pdfx(self, input_path: Path, output_path: Path, format_type: str):
         """
