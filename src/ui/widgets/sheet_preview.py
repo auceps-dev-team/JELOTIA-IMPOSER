@@ -1,4 +1,5 @@
 
+from pathlib import Path
 from typing import List, Optional
 
 import fitz  # PyMuPDF
@@ -214,15 +215,34 @@ class SheetPreviewWidget(QWidget):
         except Exception as e:
             self.info_label.setText(f"Erreur de chargement: {e}")
 
+    # The final export can be a PDF, TIFF or JPEG depending on the job's export
+    # format — the save dialog must match the *actual* file being copied, not
+    # assume PDF. Forcing a .pdf extension onto a TIFF/JPEG produces a file
+    # that no PDF reader (or browser) can open.
+    _SAVE_FILTERS = {
+        ".pdf": "PDF Files (*.pdf)",
+        ".tiff": "TIFF Files (*.tiff)",
+        ".tif": "TIFF Files (*.tif)",
+        ".jpg": "JPEG Files (*.jpg)",
+        ".jpeg": "JPEG Files (*.jpeg)",
+    }
+
     def export_pdf(self):
         if not self.current_pdf_path:
             return
-        save_path, _ = QFileDialog.getSaveFileName(self, "Exporter PDF", "", "PDF Files (*.pdf)")
+        src_path = Path(self.current_pdf_path)
+        ext = src_path.suffix.lower() or ".pdf"
+        file_filter = self._SAVE_FILTERS.get(ext, f"Files (*{ext})")
+
+        save_path, _ = QFileDialog.getSaveFileName(
+            self, "Exporter la planche", src_path.name, file_filter
+        )
         if save_path:
+            save_path = str(Path(save_path).with_suffix(ext)) if Path(save_path).suffix.lower() != ext else save_path
             import shutil
             try:
                 shutil.copy2(self.current_pdf_path, save_path)
-                QMessageBox.information(self, "Succès", f"PDF exporté vers {save_path}")
+                QMessageBox.information(self, "Succès", f"Planche exportée vers {save_path}")
             except Exception as e:
                 QMessageBox.warning(self, "Erreur", f"Erreur lors de l'exportation: {e}")
 
