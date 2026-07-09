@@ -1,3 +1,4 @@
+import sys
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -46,7 +47,8 @@ class AutoProcessor(QThread):
                 doc.close()
                 return (round(rect.width, 2), round(rect.height, 2))
         except Exception as e:
-            print(f"Failed to read {file_path}: {e}")
+            if sys.stdout is not None:
+                print(f"Failed to read {file_path}: {e}")
         return (0, 0)
         
     def _is_schedule_met(self):

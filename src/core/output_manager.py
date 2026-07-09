@@ -1,4 +1,5 @@
 import shutil
+import sys
 import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -63,7 +64,8 @@ class OutputManager:
                 f.write('</JobTicket>\n')
             return str(ticket_path)
         except Exception as e:
-            print(f"Failed to generate Job Ticket: {e}")
+            if sys.stdout is not None:
+                print(f"Failed to generate Job Ticket: {e}")
             return None
 
     def copy_to_rip_hot_folder(self, file_paths: list, rip_dir: str):
@@ -102,7 +104,8 @@ class OutputManager:
                     
             return str(zip_path)
         except Exception as e:
-            print(f"Failed to archive {job_name}: {e}")
+            if sys.stdout is not None:
+                print(f"Failed to archive {job_name}: {e}")
             return None
             
     def cleanup_archives(self):

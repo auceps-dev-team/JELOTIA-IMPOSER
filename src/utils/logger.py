@@ -13,12 +13,15 @@ def setup_logger() -> Any:
     # Remove default handler
     logger.remove()
 
-    # Console handler
-    logger.add(
-        sys.stderr,
-        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
-        level="DEBUG",
-    )
+    # Console handler — sys.stderr is None in a windowed (console=False)
+    # PyInstaller build, which would make loguru raise on add() and crash the
+    # app before any window ever shows. Only attach it when a real stream exists.
+    if sys.stderr is not None:
+        logger.add(
+            sys.stderr,
+            format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+            level="DEBUG",
+        )
 
     # File handler (daily rotation)
     log_file = config.log_dir / "jelotia_imposer_{time:YYYY-MM-DD}.log"

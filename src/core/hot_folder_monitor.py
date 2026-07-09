@@ -1,5 +1,6 @@
 import os
 import shutil
+import sys
 import time
 from pathlib import Path
 
@@ -155,5 +156,6 @@ class HotFolderMonitor:
             return True
             
         except Exception as e:
-            print(f"Failed to move {path}: {e}")
+            if sys.stdout is not None:
+                print(f"Failed to move {path}: {e}")
             return False
