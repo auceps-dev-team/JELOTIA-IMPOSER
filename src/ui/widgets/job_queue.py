@@ -85,12 +85,20 @@ class JobsWidget(QWidget):
     #  Job management                                                      #
     # ------------------------------------------------------------------ #
 
-    def add_job(self, name: str, files_count: int, status: str = "PENDING") -> int:
-        """Add a real job row. Returns the new row index."""
+    def add_job(self, name: str, files_count: int, status: str = "PENDING", date_str=None) -> int:
+        """Add a real job row. Returns the new row index.
+
+        `date_str` may be omitted (defaults to now), a pre-formatted string,
+        or a datetime (e.g. a persisted job's original created_at when
+        reloading job history on startup)."""
         row = self.table.rowCount()
         self.table.insertRow(row)
 
-        date_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        if date_str is None:
+            date_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        elif isinstance(date_str, datetime.datetime):
+            date_str = date_str.strftime("%Y-%m-%d %H:%M")
+
         self.table.setItem(row, 0, QTableWidgetItem(name))
         self._set_status_item(row, status)
         self.table.setItem(row, 2, QTableWidgetItem(str(files_count)))

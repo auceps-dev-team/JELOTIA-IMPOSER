@@ -1,3 +1,4 @@
+import multiprocessing
 import sys
 
 from PySide6.QtWidgets import QApplication
@@ -27,4 +28,12 @@ def main():
 
 
 if __name__ == "__main__":
+    # Required for multiprocessing (ProcessPoolExecutor, used by the worker
+    # pool) to work in a frozen PyInstaller build on Windows. Without this,
+    # each spawned worker process doesn't recognize itself as a worker and
+    # re-runs this whole module as if freshly launched — opening a brand new
+    # GUI window per worker instead of executing the submitted job function
+    # (which is also why jobs never actually produced any sheets: the real
+    # work never ran, the process pool just kept spawning more app windows).
+    multiprocessing.freeze_support()
     main()

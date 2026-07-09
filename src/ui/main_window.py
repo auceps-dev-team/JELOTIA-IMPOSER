@@ -16,9 +16,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.core.models.domain import JobSettings, Sheet
+from src.core.models.domain import JobSettings, PlacedItem, Sheet
 from src.core.output_manager import OutputManager
 from src.core.system_notifier import SystemNotifier
+from src.database.repository import DatabaseRepository
 from src.ui.widgets.job_queue import JobsWidget
 from src.ui.widgets.settings_view import SettingsWidget
 
@@ -51,6 +52,15 @@ class MainWindow(QMainWindow):
         # Stores job_name → the JobSettings used to submit it, so sheets can be
         # regenerated/re-exported later (manual edits, grouped export).
         self._job_settings: dict[str, JobSettings] = {}
+        # Stores job_name → its original input file paths, so a failed job can
+        # actually be resumed (re-run through the pipeline), not just have its
+        # status reset with nothing to reprocess.
+        self._job_source_paths: dict[str, list[str]] = {}
+        # Stores job_name → its canonical job_id, so resuming reuses the same
+        # id (and DB row / table row) instead of creating a duplicate job.
+        self._job_ids: dict[str, uuid.UUID] = {}
+
+        self.db = DatabaseRepository()
 
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
@@ -68,6 +78,7 @@ class MainWindow(QMainWindow):
         self.setup_system_tray()
         self.setup_worker_pool()
         self.setup_hot_folder_monitor()
+        self.load_persisted_jobs()
         self.recover_orphan_jobs()
 
     # ------------------------------------------------------------------ #
@@ -115,7 +126,7 @@ class MainWindow(QMainWindow):
             generate_thumbnail=True,
         )
 
-    def _submit_job(self, job_name: str, file_paths: list[str]) -> str:
+    def _submit_job(self, job_name: str, file_paths: list[str], reuse_job_id: uuid.UUID = None) -> str:
         """Submit a job to the worker pool.
 
         WorkerPoolManager parallelizes at the job level: one process_job_files()
@@ -132,6 +143,9 @@ class MainWindow(QMainWindow):
         submit one finalize step for the whole logical job, keyed by this
         shared id, instead of nesting each chunk's files independently.
 
+        `reuse_job_id` is passed when resuming a previously failed job, so it
+        updates the same DB row / table row instead of creating a duplicate.
+
         Returns the shared job UUID string.
         """
         from src.utils.config_manager import ConfigManager
@@ -143,9 +157,14 @@ class MainWindow(QMainWindow):
         chunk_size = max(1, int(ConfigManager().get("automation", "max_files_per_job") or 50))
         chunks = [paths[i : i + chunk_size] for i in range(0, len(paths), chunk_size)] or [[]]
 
-        job_id = uuid.uuid4()
+        job_id = reuse_job_id or uuid.uuid4()
         job_id_str = str(job_id)
         self.jobs_view.job_uuid_map[job_id_str] = job_name
+        self._job_ids[job_name] = job_id
+
+        source_path_strs = [str(p) for p in paths]
+        self._job_source_paths[job_name] = source_path_strs
+        self.db.create_job_stub(job_id_str, job_name, source_path_strs, settings)
 
         self._job_group_state[job_name] = {
             "job_id": job_id,
@@ -171,6 +190,7 @@ class MainWindow(QMainWindow):
             self.status_bar.showMessage(f"Job {job_name} en cours...")
             count = int(self.dashboard_view.card_active_jobs.value_label.text())
             self.dashboard_view.card_active_jobs.value_label.setText(str(count + 1))
+            self.db.update_job_status(job_id, "PROCESSING")
         if group is not None:
             group["started"] += 1
 
@@ -223,6 +243,7 @@ class MainWindow(QMainWindow):
             self.status_bar.showMessage(f"Erreur — Job {job_name}")
             self.notifier.notify("Erreur Job", f"{job_name}: {error_msg}", True)
             self.jobs_view.update_job_status(job_id, "ERROR")
+            self.db.update_job_status(job_id, "ERROR")
             count = int(self.dashboard_view.card_active_jobs.value_label.text())
             self.dashboard_view.card_active_jobs.value_label.setText(str(max(0, count - 1)))
             return
@@ -239,14 +260,17 @@ class MainWindow(QMainWindow):
     def _dispatch_finalize(self, job_name: str, group: dict):
         """All chunks of this logical job are done — submit the combined
         FileItems for nesting/layout/export as a single finalize step."""
+        job_id_str = str(group["job_id"])
         if not group["file_items"]:
             # Nothing to nest (every chunk failed, or produced no files).
-            self._finalize_job(job_name, str(group["job_id"]), 0, group["preflight_map"], errored=True)
+            self.db.update_job_status(job_id_str, "ERROR")
+            self._finalize_job(job_name, job_id_str, 0, group["preflight_map"], errored=True)
             del self._job_group_state[job_name]
             return
 
         settings = self._job_settings.get(job_name) or self._build_job_settings()
-        self.jobs_view.update_job_status(str(group["job_id"]), "PROCESSING")
+        self.jobs_view.update_job_status(job_id_str, "PROCESSING")
+        self.db.update_job_files(job_id_str, group["file_items"])
         self.worker_thread.submit_finalize(group["job_id"], group["file_items"], settings, job_name)
 
     def handle_finalize_completed(self, job_id: str, sheets: list):
@@ -256,9 +280,11 @@ class MainWindow(QMainWindow):
         valid_sheets = [s for s in sheets if s.export_path and s.export_path.exists()]
         if valid_sheets:
             self._job_sheets[job_name] = valid_sheets
+        self.db.update_job_sheets(job_id, valid_sheets)
 
         preflight_map = group["preflight_map"] if group is not None else {}
         errored = group["errored"] if group is not None else False
+        self.db.update_job_status(job_id, "ERROR" if errored else "DONE")
         self._finalize_job(job_name, job_id, len(sheets), preflight_map, errored=errored)
 
         if group is not None:
@@ -269,6 +295,7 @@ class MainWindow(QMainWindow):
         group = self._job_group_state.get(job_name)
 
         self.notifier.notify("Erreur Job", f"{job_name}: {error_msg}", True)
+        self.db.update_job_status(job_id, "ERROR")
         preflight_map = group["preflight_map"] if group is not None else {}
         self._finalize_job(job_name, job_id, 0, preflight_map, errored=True)
 
@@ -444,6 +471,60 @@ class MainWindow(QMainWindow):
         self._submit_job(group_name, files)
 
     # ------------------------------------------------------------------ #
+    #  Job persistence                                                     #
+    # ------------------------------------------------------------------ #
+
+    def load_persisted_jobs(self):
+        """Repopulates the Jobs table and in-memory state from the database
+        on startup, so job history (and completed jobs' planches) survives an
+        app restart or crash instead of vanishing."""
+        try:
+            recovered = self.db.recover_processing_jobs()
+            if recovered:
+                self.status_bar.showMessage(
+                    f"{recovered} job(s) interrompu(s) remis en attente après redémarrage."
+                )
+            jobs = self.db.get_all_jobs()
+        except Exception as e:
+            self.status_bar.showMessage(f"Erreur de chargement des jobs sauvegardés : {e}")
+            return
+
+        for job in jobs:
+            status = "PENDING" if job.status == "PROCESSING" else job.status
+            self.jobs_view.job_uuid_map[job.id] = job.name
+            self._job_ids[job.name] = uuid.UUID(job.id)
+            self._job_source_paths[job.name] = list(job.source_paths or [])
+
+            try:
+                self._job_settings[job.name] = JobSettings(**(job.settings or {}))
+            except Exception:
+                pass
+
+            self.jobs_view.add_job(job.name, len(job.source_paths or []), status, date_str=job.created_at)
+            self.jobs_view.update_job_status(job.id, status, len(job.sheets))
+
+            if job.sheets:
+                restored_sheets = []
+                for sm in job.sheets:
+                    try:
+                        items = [PlacedItem(**it) for it in (sm.items or [])]
+                        restored_sheets.append(
+                            Sheet(
+                                job_id=uuid.UUID(job.id),
+                                sheet_number=sm.sheet_number,
+                                width_mm=sm.width_mm,
+                                height_mm=sm.height_mm,
+                                fill_rate=sm.fill_rate or 0.0,
+                                items=items,
+                                export_path=Path(sm.export_path) if sm.export_path else None,
+                            )
+                        )
+                    except Exception as e:
+                        self.status_bar.showMessage(f"Planche non restaurée pour {job.name} : {e}")
+                if restored_sheets:
+                    self._job_sheets[job.name] = restored_sheets
+
+    # ------------------------------------------------------------------ #
     #  Orphan recovery                                                     #
     # ------------------------------------------------------------------ #
 
@@ -464,8 +545,20 @@ class MainWindow(QMainWindow):
         self.notifier.notify("Job Annulé", job_name, False)
 
     def handle_resume_job(self, job_name: str):
+        """Actually re-runs a failed job through the whole pipeline again,
+        from its original source files — reusing the same job_id so this
+        updates the existing row (DB and table) instead of duplicating it."""
+        source_paths = self._job_source_paths.get(job_name)
+        if not source_paths:
+            self.status_bar.showMessage(
+                f"Impossible de reprendre {job_name} : fichiers sources introuvables."
+            )
+            self.jobs_view.update_job_status(job_name, "ERROR")
+            return
+
         self.status_bar.showMessage(f"Job repris: {job_name}")
         self.notifier.notify("Job Repris", job_name, False)
+        self._submit_job(job_name, source_paths, reuse_job_id=self._job_ids.get(job_name))
 
     # ------------------------------------------------------------------ #
     #  Cleanup                                                             #

@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker, subqueryload
 
-from src.core.models.domain import FileItem, Job, Sheet
+from src.core.models.domain import FileItem, Job, JobSettings, Sheet
 from src.database.models import Base, FileItemModel, JobModel, SheetModel
 from src.utils.config import config
 
@@ -24,6 +24,48 @@ class DatabaseRepository:
 
     def get_session(self) -> Session:
         return self.SessionLocal()
+
+    def create_job_stub(
+        self, job_id: str, name: str, source_paths: List[str], settings: JobSettings
+    ) -> bool:
+        """Persists a job the moment it's submitted — before any files have
+        been processed yet — so it survives a crash/restart and (if it later
+        fails) can actually be resumed from its original source files.
+
+        Upserts: resuming a failed job resubmits under the *same* job_id (see
+        MainWindow._submit_job's reuse_job_id), so this must update the
+        existing row in place rather than fail on a duplicate primary key —
+        clearing any stale files/sheets from the previous failed attempt.
+        """
+        session = self.get_session()
+        try:
+            existing = session.query(JobModel).filter(JobModel.id == job_id).first()
+            if existing:
+                existing.name = name
+                existing.status = "PENDING"
+                existing.settings = settings.model_dump()
+                existing.source_paths = list(source_paths)
+                session.query(FileItemModel).filter(FileItemModel.job_id == job_id).delete()
+                session.query(SheetModel).filter(SheetModel.job_id == job_id).delete()
+            else:
+                session.add(
+                    JobModel(
+                        id=job_id,
+                        name=name,
+                        status="PENDING",
+                        settings=settings.model_dump(),
+                        stats={},
+                        source_paths=list(source_paths),
+                    )
+                )
+            session.commit()
+            return True
+        except SQLAlchemyError as e:
+            session.rollback()
+            logger.error(f"Error creating job stub {job_id}: {e}")
+            return False
+        finally:
+            session.close()
 
     def create_job(self, job: Job) -> Optional[str]:
         """Create a new job in the database."""

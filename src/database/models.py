@@ -22,6 +22,10 @@ class JobModel(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     settings = Column(JSON, nullable=False)
     stats = Column(JSON, nullable=False)
+    # Original input file paths as submitted, kept so a failed/interrupted
+    # job can actually be resumed (re-run through the whole pipeline) rather
+    # than just having its status reset with nothing to re-process.
+    source_paths = Column(JSON, nullable=False, default=list)
 
     files = relationship("FileItemModel", back_populates="job", cascade="all, delete-orphan")
     sheets = relationship("SheetModel", back_populates="job", cascade="all, delete-orphan")
