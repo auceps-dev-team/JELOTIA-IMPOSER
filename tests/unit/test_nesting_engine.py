@@ -1,7 +1,12 @@
 import uuid
 from pathlib import Path
 
-from src.core.engines.nesting_engine import NestingEngine, RectpackNestingStrategy, NestingStrategy
+from src.core.engines.nesting_engine import (
+    NestingEngine,
+    NestingStrategy,
+    RectpackNestingStrategy,
+    ShelfNestingStrategy,
+)
 from src.core.models.domain import (
     ColorMode,
     FileFormat,
@@ -196,6 +201,125 @@ def test_fill_rate_benchmark_above_75_percent():
     assert avg_fill >= 75.0, (
         f"Fill rate {avg_fill:.1f}% inférieur au seuil 75% (corpus cartes de visite)"
     )
+
+
+def test_shelf_empty_items():
+    strategy = ShelfNestingStrategy()
+    assert strategy.pack([], JobSettings()) == []
+
+
+def test_shelf_rows_are_aligned():
+    """Mixed sizes should still align into uniform rows: every item sharing a
+    row sits on the same y_mm, and rows don't overlap."""
+    settings = JobSettings(
+        sheet_width_mm=200.0, sheet_height_mm=200.0, gap_mm=2.0, allow_rotation=False
+    )
+    items = [
+        create_mock_file(60, 40, quantity=3),
+        create_mock_file(30, 20, quantity=4),
+    ]
+    strategy = ShelfNestingStrategy()
+    sheets = strategy.pack(items, settings)
+
+    assert len(sheets) == 1
+    sheet = sheets[0]
+    assert len(sheet.items) == 7
+
+    rows = {}
+    for it in sheet.items:
+        rows.setdefault(it.y_mm, []).append(it)
+
+    # Each row's items all share the exact same y_mm (uniform row alignment).
+    for y, row_items in rows.items():
+        assert all(abs(i.y_mm - y) < 1e-6 for i in row_items)
+
+    # No item exceeds sheet bounds.
+    for it in sheet.items:
+        assert it.x_mm + it.width_mm <= 200.0 + 1e-6
+        assert it.y_mm + it.height_mm <= 200.0 + 1e-6
+
+    # No two items on the same row overlap horizontally.
+    for y, row_items in rows.items():
+        row_items.sort(key=lambda i: i.x_mm)
+        for a, b in zip(row_items, row_items[1:]):
+            assert a.x_mm + a.width_mm <= b.x_mm + 1e-6
+
+
+def test_shelf_overflow_multiple_sheets():
+    settings = JobSettings(
+        sheet_width_mm=100.0, sheet_height_mm=100.0, gap_mm=0.0, allow_rotation=False
+    )
+    items = [create_mock_file(50, 50, quantity=5)]
+
+    strategy = ShelfNestingStrategy()
+    sheets = strategy.pack(items, settings)
+
+    assert len(sheets) == 2
+    assert sum(len(s.items) for s in sheets) == 5
+    assert sheets[0].sheet_number == 1
+    assert sheets[1].sheet_number == 2
+
+
+def test_shelf_too_large_item_skipped(caplog):
+    settings = JobSettings(
+        sheet_width_mm=100.0, sheet_height_mm=100.0, gap_mm=0.0, allow_rotation=False
+    )
+    items = [create_mock_file(200, 200, quantity=1)]
+
+    strategy = ShelfNestingStrategy()
+    sheets = strategy.pack(items, settings)
+
+    assert len(sheets) == 0
+    assert "Could not pack all items" in caplog.text
+
+
+def test_shelf_rotation_used_when_beneficial():
+    settings = JobSettings(
+        sheet_width_mm=100.0, sheet_height_mm=50.0, gap_mm=0.0, allow_rotation=True
+    )
+    items = [create_mock_file(50.0, 100.0, quantity=1)]
+
+    strategy = ShelfNestingStrategy()
+    sheets = strategy.pack(items, settings)
+
+    assert len(sheets) == 1
+    placed_item = sheets[0].items[0]
+    assert placed_item.rotated is True
+    assert placed_item.width_mm == 100.0
+    assert placed_item.height_mm == 50.0
+
+
+def test_shelf_fill_rate_benchmark_above_75_percent():
+    """Same acceptance criterion as the MaxRects benchmark: uniform-size corpus
+    should still reach a high fill rate with the row-aligned shelf packer."""
+    settings = JobSettings(
+        sheet_width_mm=900.0, sheet_height_mm=600.0, gap_mm=3.0, allow_rotation=False
+    )
+    items = [create_mock_file(85.0, 55.0, quantity=100)]
+
+    strategy = ShelfNestingStrategy()
+    sheets = strategy.pack(items, settings)
+
+    assert len(sheets) > 0
+    avg_fill = sum(s.fill_rate for s in sheets) / len(sheets)
+    assert avg_fill >= 75.0, f"Fill rate {avg_fill:.1f}% inférieur au seuil 75% (shelf packing)"
+
+
+def test_nesting_engine_uses_shelf_strategy_filters_errors():
+    settings = JobSettings(
+        sheet_width_mm=100.0, sheet_height_mm=100.0, gap_mm=0.0, allow_rotation=False
+    )
+    items = [
+        create_mock_file(50, 50, status=PreflightStatus.OK),
+        create_mock_file(50, 50, status=PreflightStatus.ERROR),
+        create_mock_file(50, 50, status=PreflightStatus.WARNING),
+    ]
+
+    engine = NestingEngine(ShelfNestingStrategy())
+    sheets = engine.process(items, settings)
+
+    assert len(sheets) == 1
+    assert len(sheets[0].items) == 2
 
 
 def test_nesting_guillotine_algo():

@@ -50,7 +50,7 @@ def test_export_pdfx(export_engine, base_pdf_path, output_dir):
     # Verify basic PDF/X metadata injection
     with pikepdf.Pdf.open(result_path) as pdf:
         assert "/OutputIntents" in pdf.Root
-        assert "/GTS_PDFXVersion" in pdf.Root.Info
+        assert pdf.docinfo["/GTS_PDFXVersion"] == "PDF/X-1a:2001"
 
 
 def test_export_tiff(export_engine, base_pdf_path, output_dir):
@@ -98,7 +98,7 @@ def test_export_pdfx4(export_engine, base_pdf_path, output_dir):
     # Verify basic PDF/X metadata injection
     with pikepdf.Pdf.open(result_path) as pdf:
         assert "/OutputIntents" in pdf.Root
-        assert "/GTS_PDFXVersion" in pdf.Root.Info
+        assert pdf.docinfo["/GTS_PDFXVersion"] == "PDF/X-4"
 
 
 def test_export_unknown_format(export_engine, base_pdf_path, output_dir):
@@ -140,6 +140,28 @@ def test_export_empty_pdf(mock_fitz_open, export_engine, tmp_path, output_dir):
 
     with pytest.raises(ValueError, match="Source PDF has no pages"):
         export_engine.export_sheet(job_id, sheet, empty_pdf, settings, output_dir)
+
+
+def test_export_filename_uses_job_name(export_engine, base_pdf_path, output_dir):
+    job_id = uuid4()
+    sheet = Sheet(job_id=job_id, sheet_number=3)
+    settings = JobSettings(export_format="TIFF")
+
+    result_path = export_engine.export_sheet(
+        job_id, sheet, base_pdf_path, settings, output_dir, job_name="Client Projet X"
+    )
+
+    assert result_path.name == "client_projet_x_planche_03.tiff"
+
+
+def test_export_filename_falls_back_to_job_id(export_engine, base_pdf_path, output_dir):
+    job_id = uuid4()
+    sheet = Sheet(job_id=job_id, sheet_number=1)
+    settings = JobSettings(export_format="TIFF")
+
+    result_path = export_engine.export_sheet(job_id, sheet, base_pdf_path, settings, output_dir)
+
+    assert result_path.name == f"{str(job_id)[:8]}_planche_01.tiff"
 
 
 @patch("src.core.engines.export_engine.fitz.open")

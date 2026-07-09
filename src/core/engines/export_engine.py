@@ -1,4 +1,5 @@
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
 from uuid import UUID
@@ -12,20 +13,33 @@ from src.core.models.domain import JobSettings, Sheet
 logger = logging.getLogger(__name__)
 
 
+def _slugify(name: str) -> str:
+    """Lowercase, filesystem-safe slug: spaces/special chars collapse to '_'."""
+    slug = re.sub(r"[^a-zA-Z0-9]+", "_", name.strip()).strip("_").lower()
+    return slug or "job"
+
+
 class ExportEngine:
     """
     ExportEngine post-processes the base PDF sheet to the final targeted output format (PDF/X, TIFF, JPEG).
     """
 
-    def export_sheet(self, job_id: UUID, sheet: Sheet, base_pdf_path: Path, settings: JobSettings, output_dir: Path) -> Path:
+    def export_sheet(
+        self,
+        job_id: UUID,
+        sheet: Sheet,
+        base_pdf_path: Path,
+        settings: JobSettings,
+        output_dir: Path,
+        job_name: str | None = None,
+    ) -> Path:
         """
         Exports the base PDF sheet according to JobSettings.
         Returns the path to the newly created exported file.
         """
         output_dir.mkdir(parents=True, exist_ok=True)
-        date_str = datetime.now().strftime("%Y%m%d_%H%M%S")
         job_id_str = str(job_id)[:8]
-        
+
         # Decide extension based on format
         fmt = settings.export_format.upper()
         ext = ".pdf"
@@ -33,8 +47,9 @@ class ExportEngine:
             ext = ".tiff"
         elif fmt == "JPEG":
             ext = ".jpg"
-            
-        final_filename = f"{job_id_str}_{sheet.sheet_number}_{date_str}{ext}"
+
+        base_name = _slugify(job_name) if job_name else job_id_str
+        final_filename = f"{base_name}_planche_{sheet.sheet_number:02d}{ext}"
         final_path = output_dir / final_filename
 
         try:
@@ -78,15 +93,14 @@ class ExportEngine:
                 output_intents.append(intent_dict)
                 pdf.Root.OutputIntents = output_intents
 
-                # Set PDF/X version string
+                # Set PDF/X version string in the document's real Info dictionary
+                # (trailer /Info via pikepdf's docinfo), not on the Catalog — a RIP
+                # or preflight tool looks for GTS_PDFXVersion there and will reject
+                # the file as non-conformant if it's missing.
                 if format_type == "PDF/X-1A":
-                    pdf.Root.Info = pdf.make_indirect(pikepdf.Dictionary({
-                        "/GTS_PDFXVersion": "PDF/X-1a:2001"
-                    }))
+                    pdf.docinfo["/GTS_PDFXVersion"] = pikepdf.String("PDF/X-1a:2001")
                 elif format_type == "PDF/X-4":
-                    pdf.Root.Info = pdf.make_indirect(pikepdf.Dictionary({
-                        "/GTS_PDFXVersion": "PDF/X-4"
-                    }))
+                    pdf.docinfo["/GTS_PDFXVersion"] = pikepdf.String("PDF/X-4")
 
                 pdf.save(output_path)
             logger.info(f"Exported {format_type} to {output_path}")

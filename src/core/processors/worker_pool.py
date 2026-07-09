@@ -57,11 +57,13 @@ class WorkerPoolManager:
         self.executor.shutdown(wait=True)
         logger.info("WorkerPoolManager stopped.")
 
-    async def submit_job(self, job_id: UUID, file_paths: List[Path], settings: JobSettings):
+    async def submit_job(
+        self, job_id: UUID, file_paths: List[Path], settings: JobSettings, job_name: str = None
+    ):
         """
         Submits a job to the queue.
         """
-        await self.queue.put((job_id, file_paths, settings))
+        await self.queue.put((job_id, file_paths, settings, job_name))
         logger.debug(f"Job {job_id} queued. Queue size: {self.queue.qsize()}")
 
     async def _dispatcher_loop(self):
@@ -72,14 +74,14 @@ class WorkerPoolManager:
         while self.is_running:
             try:
                 # Wait for the next job in the queue
-                job_id, file_paths, settings = await self.queue.get()
+                job_id, file_paths, settings, job_name = await self.queue.get()
 
                 logger.info(f"Dispatching Job {job_id} to worker pool...")
 
                 # We do not `await` the executor directly here because we want to
                 # dispatch multiple jobs up to the worker limit concurrently.
                 # Instead, we create a task that awaits the executor.
-                asyncio.create_task(self._execute_job(loop, job_id, file_paths, settings))
+                asyncio.create_task(self._execute_job(loop, job_id, file_paths, settings, job_name))
 
                 self.queue.task_done()
             except asyncio.CancelledError:
@@ -87,14 +89,16 @@ class WorkerPoolManager:
             except Exception as e:
                 logger.error(f"Error in dispatcher loop: {e}")
 
-    async def _execute_job(self, loop, job_id: UUID, file_paths: List[Path], settings: JobSettings):
+    async def _execute_job(
+        self, loop, job_id: UUID, file_paths: List[Path], settings: JobSettings, job_name: str = None
+    ):
         """
         Executes a single job in the process pool and triggers the callback.
         """
         try:
             # Run the synchronous CPU-bound task in the process pool
             result: List[FileItem] = await loop.run_in_executor(
-                self.executor, process_job_files, job_id, file_paths, settings
+                self.executor, process_job_files, job_id, file_paths, settings, job_name
             )
 
             # Trigger success callback

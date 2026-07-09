@@ -50,13 +50,15 @@ class WorkerPoolThread(QThread):
             self.pool_manager.start()
         self.ready_event.set()
 
-    def submit_job(self, job_id: UUID, file_paths: List[Path], settings: JobSettings):
+    def submit_job(
+        self, job_id: UUID, file_paths: List[Path], settings: JobSettings, job_name: str = None
+    ):
         """Thread-safe submission from main UI thread."""
         self.ready_event.wait()
         if self.pool_manager is None or self.loop is None:
             return
         asyncio.run_coroutine_threadsafe(
-            self.pool_manager.submit_job(job_id, file_paths, settings),
+            self.pool_manager.submit_job(job_id, file_paths, settings, job_name),
             self.loop
         )
         self.job_started.emit(str(job_id))

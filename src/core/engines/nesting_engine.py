@@ -148,6 +148,131 @@ class RectpackNestingStrategy(NestingStrategy):
         return sheets
 
 
+class ShelfNestingStrategy(NestingStrategy):
+    """
+    Shelf Best-Fit Decreasing Height packing.
+
+    Items are sorted tallest-first and packed into horizontal rows ("shelves")
+    that span the sheet; every item in a row sits on the same y and the row's
+    height is fixed by the first (tallest) item placed in it. This produces a
+    visually uniform, row-aligned layout — unlike MaxRects/Guillotine, which
+    stagger items at irregular offsets — while still trying to minimize wasted
+    space by slotting each item into the existing row that wastes the least
+    vertical space before opening a new row.
+    """
+
+    @staticmethod
+    def _orient(width_mm: float, height_mm: float, allow_rotation: bool, sheet_w: float, sheet_h: float):
+        """Returns (w, h, rotated) for the orientation that fits the sheet and
+        yields the smallest height (flatter row = more uniform), or None if the
+        item cannot fit the sheet in any allowed orientation."""
+        candidates = [(width_mm, height_mm, False)]
+        if allow_rotation:
+            candidates.append((height_mm, width_mm, True))
+
+        fitting = [c for c in candidates if c[0] <= sheet_w and c[1] <= sheet_h]
+        if not fitting:
+            return None
+        fitting.sort(key=lambda c: c[1])
+        return fitting[0]
+
+    def pack(self, items: List[FileItem], settings: JobSettings) -> List[Sheet]:
+        if not items:
+            return []
+
+        gap = settings.gap_mm
+        sheet_w = settings.sheet_width_mm
+        sheet_h = settings.sheet_height_mm
+        job_id = items[0].job_id
+
+        rects = []
+        skipped = 0
+        for item in items:
+            oriented = self._orient(item.width_mm, item.height_mm, settings.allow_rotation, sheet_w, sheet_h)
+            if oriented is None:
+                skipped += item.quantity
+                continue
+            w, h, rotated = oriented
+            for _ in range(item.quantity):
+                rects.append({"item": item, "w": w, "h": h, "rotated": rotated})
+
+        total_elements = sum(item.quantity for item in items)
+        if skipped:
+            logger.warning(
+                f"Could not pack all items! {len(rects)}/{total_elements} packed "
+                f"({skipped} too large for the sheet in any orientation)."
+            )
+
+        # Decreasing Height: tallest items placed first, so each new shelf's
+        # fixed height is set by the tallest item that will ever need it.
+        rects.sort(key=lambda r: r["h"], reverse=True)
+
+        sheets: List[Sheet] = []
+        shelves: List[dict] = []
+        cursor_y = 0.0
+
+        def open_sheet():
+            nonlocal shelves, cursor_y
+            sheets.append(
+                Sheet(job_id=job_id, sheet_number=len(sheets) + 1, width_mm=sheet_w, height_mm=sheet_h)
+            )
+            shelves = []
+            cursor_y = 0.0
+
+        def open_shelf(height: float):
+            nonlocal cursor_y
+            needed_y = cursor_y + (gap if shelves else 0.0)
+            if needed_y + height > sheet_h:
+                open_sheet()
+                needed_y = 0.0
+            shelf = {"y": needed_y, "height": height, "used_width": 0.0}
+            shelves.append(shelf)
+            cursor_y = needed_y + height
+            return shelf
+
+        open_sheet()
+
+        for r in rects:
+            w, h = r["w"], r["h"]
+
+            best, best_waste = None, None
+            for shelf in shelves:
+                x = shelf["used_width"] + (gap if shelf["used_width"] > 0 else 0.0)
+                if x + w <= sheet_w and h <= shelf["height"]:
+                    waste = shelf["height"] - h
+                    if best_waste is None or waste < best_waste:
+                        best, best_waste = shelf, waste
+
+            if best is None:
+                best = open_shelf(h)
+
+            x = best["used_width"] + (gap if best["used_width"] > 0 else 0.0)
+            sheets[-1].items.append(
+                PlacedItem(
+                    file_item_id=r["item"].id,
+                    source_path=r["item"].path,
+                    x_mm=x,
+                    y_mm=best["y"],
+                    width_mm=w,
+                    height_mm=h,
+                    rotated=r["rotated"],
+                )
+            )
+            best["used_width"] = x + w
+
+        sheet_area = sheet_w * sheet_h
+        for s in sheets:
+            placed_area = sum(pi.width_mm * pi.height_mm for pi in s.items)
+            s.fill_rate = (placed_area / sheet_area) * 100.0 if sheet_area > 0 else 0.0
+
+        sheets = [s for s in sheets if s.items]
+        for i, s in enumerate(sheets):
+            s.sheet_number = i + 1
+
+        logger.info(f"Shelf nesting completed: {len(sheets)} sheets generated.")
+        return sheets
+
+
 class NestingEngine:
     """
     Main engine for placing files on print sheets.

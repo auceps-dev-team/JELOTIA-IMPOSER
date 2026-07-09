@@ -6,7 +6,7 @@ from uuid import UUID
 
 from src.core.engines.correction_engine import CorrectionEngine
 from src.core.engines.import_engine import ImportEngine
-from src.core.engines.nesting_engine import NestingEngine, RectpackNestingStrategy
+from src.core.engines.nesting_engine import NestingEngine, ShelfNestingStrategy
 from src.core.engines.preflight_engine import PreflightEngine
 from src.core.models.domain import FileItem, JobSettings, PreflightStatus, Sheet
 
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def process_job_files(
-    job_id: UUID, file_paths: List[Path], settings: JobSettings
+    job_id: UUID, file_paths: List[Path], settings: JobSettings, job_name: str = None
 ) -> Tuple[List[FileItem], List[Sheet]]:
     """
     Processes a list of file paths for a single job.
@@ -25,6 +25,9 @@ def process_job_files(
         job_id (UUID): The ID of the Job.
         file_paths (List[Path]): The raw files to process.
         settings (JobSettings): The settings associated with the Job.
+        job_name (str, optional): Human-readable job name, used to build
+            readable export filenames (see ExportEngine.export_sheet). Falls
+            back to a short job_id when not provided.
 
     Returns:
         List[FileItem]: The fully processed FileItems.
@@ -79,7 +82,7 @@ def process_job_files(
             pass
 
     # 4. Nesting (Places corrected files on sheets)
-    nesting_engine = NestingEngine(RectpackNestingStrategy(algo_type="maxrects"))
+    nesting_engine = NestingEngine(ShelfNestingStrategy())
     sheets = []
     try:
         sheets = nesting_engine.process(processed_items, settings)
@@ -105,7 +108,8 @@ def process_job_files(
                         sheet=sheet,
                         base_pdf_path=sheet.export_path,
                         settings=settings,
-                        output_dir=job_output_dir
+                        output_dir=job_output_dir,
+                        job_name=job_name,
                     )
                     # Update export_path to the final output file
                     sheet.export_path = final_path

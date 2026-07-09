@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.core.models.domain import JobSettings
+from src.core.models.domain import JobSettings, Sheet
 from src.core.output_manager import OutputManager
 from src.core.system_notifier import SystemNotifier
 from src.ui.widgets.job_queue import JobsWidget
@@ -29,8 +29,13 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("JELOTIA IMPOSER")
         self.resize(1200, 800)
 
-        # Stores job_name → list of export PDF paths for preview
-        self._job_sheets: dict[str, list[Path]] = {}
+        # Stores job_name → the full Sheet objects (with PlacedItem layout data),
+        # accumulated across sub-job chunks. Needed for preview navigation,
+        # manual repositioning, and grouped re-export — not just the rendered PDFs.
+        self._job_sheets: dict[str, list[Sheet]] = {}
+        # Stores job_name → the JobSettings used to submit it, so sheets can be
+        # regenerated/re-exported later (manual edits, grouped export).
+        self._job_settings: dict[str, JobSettings] = {}
 
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
@@ -110,6 +115,7 @@ class MainWindow(QMainWindow):
 
         paths = [Path(f) for f in file_paths if Path(f).exists()]
         settings = self._build_job_settings()
+        self._job_settings[job_name] = settings
 
         chunk_size = max(1, int(ConfigManager().get("automation", "max_files_per_job") or 50))
         chunks = [paths[i : i + chunk_size] for i in range(0, len(paths), chunk_size)] or [[]]
@@ -129,7 +135,7 @@ class MainWindow(QMainWindow):
             job_id_str = str(job_id)
             self.jobs_view.job_uuid_map[job_id_str] = job_name
             job_ids.append(job_id_str)
-            self.worker_thread.submit_job(job_id, chunk, settings)
+            self.worker_thread.submit_job(job_id, chunk, settings, job_name)
         return job_ids[0]
 
     def handle_job_started(self, job_id: str):
@@ -149,10 +155,10 @@ class MainWindow(QMainWindow):
         job_name = self.jobs_view.job_uuid_map.get(job_id, job_id[:8])
         group = self._job_group_state.get(job_name)
 
-        # Store sheet paths for preview (accumulated across sub-job chunks)
-        sheet_paths = [s.export_path for s in sheets if s.export_path and s.export_path.exists()]
-        if sheet_paths:
-            self._job_sheets.setdefault(job_name, []).extend(sheet_paths)
+        # Store full Sheet objects for preview/editing (accumulated across sub-job chunks)
+        valid_sheets = [s for s in sheets if s.export_path and s.export_path.exists()]
+        if valid_sheets:
+            self._job_sheets.setdefault(job_name, []).extend(valid_sheets)
 
         # Collect preflight warnings, aggregated per logical job so we show
         # a single dialog at the end instead of one per chunk.
@@ -309,9 +315,9 @@ class MainWindow(QMainWindow):
     def show_preview(self, job_name: str):
         self.stacked_widget.setCurrentWidget(self.preview_view)
         sheets = self._job_sheets.get(job_name, [])
+        settings = self._job_settings.get(job_name)
         if sheets:
-            # Show first sheet's PDF
-            self.preview_view.load_pdf(str(sheets[0]), fill_rate=None)
+            self.preview_view.load_job(job_name, sheets, settings)
         else:
             self.preview_view.info_label.setText(
                 f"Aperçu pour {job_name} — planches non encore générées."
