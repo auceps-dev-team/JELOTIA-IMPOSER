@@ -1,9 +1,12 @@
 from pathlib import Path
+from typing import Optional
 
+import fitz  # PyMuPDF
 from PySide6.QtCore import QPointF, Qt, Signal
-from PySide6.QtGui import QBrush, QColor, QPainter, QPen
+from PySide6.QtGui import QBrush, QColor, QImage, QPainter, QPen, QPixmap, QTransform
 from PySide6.QtWidgets import (
     QGraphicsItem,
+    QGraphicsPixmapItem,
     QGraphicsRectItem,
     QGraphicsScene,
     QGraphicsSimpleTextItem,
@@ -22,6 +25,32 @@ _ITEM_PEN = QPen(QColor(60, 30, 0, 220))
 _ITEM_PEN.setWidthF(0.6)
 _OVERLAP_PEN = QPen(QColor(220, 30, 30))
 _OVERLAP_PEN.setWidthF(1.2)
+_LABEL_BACKDROP = QBrush(QColor(0, 0, 0, 150))
+
+
+def _render_thumbnail(source_path: Path, rotated: bool, max_px: int = 220) -> Optional[QPixmap]:
+    """Rasterizes the item's actual artwork (PDF page or raster image) so the
+    editor shows the real element instead of a blank placeholder while it's
+    being dragged."""
+    try:
+        doc = fitz.open(str(source_path))
+        page = doc[0]
+        page_w, page_h = page.rect.width, page.rect.height
+        if page_w <= 0 or page_h <= 0:
+            return None
+        zoom = max_px / max(page_w, page_h)
+        pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
+        image = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format.Format_RGB888).copy()
+        doc.close()
+    except Exception:
+        return None
+
+    pixmap = QPixmap.fromImage(image)
+    if pixmap.isNull():
+        return None
+    if rotated:
+        pixmap = pixmap.transformed(QTransform().rotate(90), Qt.TransformationMode.SmoothTransformation)
+    return pixmap
 
 
 class _DraggableItem(QGraphicsRectItem):
@@ -38,16 +67,39 @@ class _DraggableItem(QGraphicsRectItem):
             | QGraphicsItem.GraphicsItemFlag.ItemIsSelectable
             | QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges
         )
-        self.setBrush(_ITEM_BRUSH)
         self.setPen(_ITEM_PEN)
 
+        thumbnail = _render_thumbnail(Path(str(placed_item.source_path)), placed_item.rotated)
+        has_thumbnail = thumbnail is not None and thumbnail.width() > 0 and thumbnail.height() > 0
+        if has_thumbnail:
+            self.setBrush(Qt.BrushStyle.NoBrush)
+            pixmap_item = QGraphicsPixmapItem(thumbnail, self)
+            pixmap_item.setTransform(
+                QTransform().scale(
+                    placed_item.width_mm / thumbnail.width(),
+                    placed_item.height_mm / thumbnail.height(),
+                )
+            )
+            pixmap_item.setZValue(-1)
+        else:
+            self.setBrush(_ITEM_BRUSH)
+
         label_text = f"{Path(str(placed_item.source_path)).name}\n{placed_item.width_mm:.0f}×{placed_item.height_mm:.0f}mm"
+        font_size = max(3.0, min(placed_item.height_mm, placed_item.width_mm) * 0.12)
+
+        if has_thumbnail:
+            backdrop = QGraphicsRectItem(0, 0, placed_item.width_mm, font_size * 2.6, self)
+            backdrop.setBrush(_LABEL_BACKDROP)
+            backdrop.setPen(QPen(Qt.PenStyle.NoPen))
+            backdrop.setZValue(0)
+
         label = QGraphicsSimpleTextItem(label_text, self)
         font = label.font()
-        font.setPointSizeF(max(3.0, min(placed_item.height_mm, placed_item.width_mm) * 0.12))
+        font.setPointSizeF(font_size)
         label.setFont(font)
         label.setPos(2, 2)
-        label.setBrush(QBrush(QColor(20, 10, 0)))
+        label.setZValue(1)
+        label.setBrush(QBrush(QColor(20, 10, 0)) if not has_thumbnail else QBrush(QColor(255, 255, 255)))
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange:
