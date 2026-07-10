@@ -364,6 +364,46 @@ def test_nesting_engine_uses_shelf_strategy_filters_errors():
     assert len(sheets[0].items) == 2
 
 
+def test_nesting_engine_applies_margin():
+    """Items must stay inside [margin, sheet - margin] on both axes, the
+    reported Sheet size stays the full (unshrunk) sheet, and fill_rate is
+    computed against the true full sheet area."""
+    settings = JobSettings(
+        sheet_width_mm=200.0, sheet_height_mm=100.0, gap_mm=0.0, allow_rotation=False, margin_mm=10.0
+    )
+    items = [create_mock_file(50, 50, quantity=2)]
+
+    engine = NestingEngine(ShelfNestingStrategy())
+    sheets = engine.process(items, settings)
+
+    assert len(sheets) == 1
+    sheet = sheets[0]
+    assert sheet.width_mm == 200.0
+    assert sheet.height_mm == 100.0
+    for it in sheet.items:
+        assert it.x_mm >= 10.0 - 1e-6
+        assert it.y_mm >= 10.0 - 1e-6
+        assert it.x_mm + it.width_mm <= 190.0 + 1e-6
+        assert it.y_mm + it.height_mm <= 90.0 + 1e-6
+
+    # Usable area is 180x80; both 50x50 items (5000mm² each) fit side by side.
+    expected_fill = (2 * 50 * 50) / (200 * 100) * 100.0
+    assert abs(sheet.fill_rate - expected_fill) < 0.1
+
+
+def test_nesting_engine_margin_too_large_yields_no_sheets(caplog):
+    settings = JobSettings(
+        sheet_width_mm=100.0, sheet_height_mm=100.0, margin_mm=60.0
+    )
+    items = [create_mock_file(10, 10, quantity=1)]
+
+    engine = NestingEngine(ShelfNestingStrategy())
+    sheets = engine.process(items, settings)
+
+    assert sheets == []
+    assert "no usable space" in caplog.text
+
+
 def test_nesting_guillotine_algo():
     """Vérifie que l'algo guillotine produit aussi des résultats cohérents."""
     settings = JobSettings(

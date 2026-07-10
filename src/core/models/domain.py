@@ -55,6 +55,7 @@ class JobSettings(BaseModel):
     sheet_width_mm: float = 900.0
     sheet_height_mm: float = 600.0
     gap_mm: float = 3.0
+    margin_mm: float = 0.0
     allow_rotation: bool = True
     add_bleed_mm: float = 0.0
 

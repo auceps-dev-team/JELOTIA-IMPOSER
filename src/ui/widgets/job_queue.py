@@ -23,7 +23,7 @@ class JobsWidget(QWidget):
     view_details_requested = Signal(str)   # emits job_name
     cancel_job_requested = Signal(str)
     resume_job_requested = Signal(str)
-    job_created = Signal(str, list)        # emits (job_name, file_paths:list[str])
+    job_created = Signal(str, list, dict)  # emits (job_name, file_paths:list[str], overrides:dict)
 
     def __init__(self):
         super().__init__()
@@ -148,7 +148,7 @@ class JobsWidget(QWidget):
         name = data["name"]
         file_paths = data["files"]
         self.add_job(name, len(file_paths), "PENDING")
-        self.job_created.emit(name, file_paths)
+        self.job_created.emit(name, file_paths, data["overrides"])
 
     # ------------------------------------------------------------------ #
     #  Drag & Drop                                                         #

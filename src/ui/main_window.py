@@ -119,6 +119,7 @@ class MainWindow(QMainWindow):
             sheet_width_mm=float(config.get("imposition", "sheet_width") or 900.0),
             sheet_height_mm=float(config.get("imposition", "sheet_height") or 600.0),
             gap_mm=float(config.get("imposition", "spacing") or 3.0),
+            margin_mm=float(config.get("imposition", "margin") or 0.0),
             allow_rotation=bool(config.get("imposition", "rotation_allowed")),
             min_dpi=int(config.get("preflight", "min_dpi") or 300),
             export_format=export_format,
@@ -126,7 +127,13 @@ class MainWindow(QMainWindow):
             generate_thumbnail=True,
         )
 
-    def _submit_job(self, job_name: str, file_paths: list[str], reuse_job_id: uuid.UUID = None) -> str:
+    def _submit_job(
+        self,
+        job_name: str,
+        file_paths: list[str],
+        overrides: dict = None,
+        reuse_job_id: uuid.UUID = None,
+    ) -> str:
         """Submit a job to the worker pool.
 
         WorkerPoolManager parallelizes at the job level: one process_job_files()
@@ -146,13 +153,24 @@ class MainWindow(QMainWindow):
         `reuse_job_id` is passed when resuming a previously failed job, so it
         updates the same DB row / table row instead of creating a duplicate.
 
+        `overrides` (from JobDialog) may carry a per-job sheet size
+        (`sheet_width_mm`/`sheet_height_mm`, falling back to the global
+        setting when omitted) and a per-file quantity map
+        (`quantities: {path: qty}`, applied by process_job_files after import).
+
         Returns the shared job UUID string.
         """
         from src.utils.config_manager import ConfigManager
 
+        overrides = overrides or {}
         paths = [Path(f) for f in file_paths if Path(f).exists()]
         settings = self._build_job_settings()
+        if overrides.get("sheet_width_mm"):
+            settings.sheet_width_mm = overrides["sheet_width_mm"]
+        if overrides.get("sheet_height_mm"):
+            settings.sheet_height_mm = overrides["sheet_height_mm"]
         self._job_settings[job_name] = settings
+        quantities = overrides.get("quantities") or {}
 
         chunk_size = max(1, int(ConfigManager().get("automation", "max_files_per_job") or 50))
         chunks = [paths[i : i + chunk_size] for i in range(0, len(paths), chunk_size)] or [[]]
@@ -177,7 +195,7 @@ class MainWindow(QMainWindow):
         }
 
         for chunk in chunks:
-            self.worker_thread.submit_job(job_id, chunk, settings)
+            self.worker_thread.submit_job(job_id, chunk, settings, quantities)
         return job_id_str
 
     def handle_job_started(self, job_id: str):
@@ -392,10 +410,10 @@ class MainWindow(QMainWindow):
         self.stacked_widget.addWidget(self.preview_view)
         self.stacked_widget.addWidget(self.settings_view)
 
-    def _on_job_created(self, job_name: str, file_paths: list):
+    def _on_job_created(self, job_name: str, file_paths: list, overrides: dict):
         """Called when a manual job is created in the dialog."""
         if file_paths:
-            self._submit_job(job_name, file_paths)
+            self._submit_job(job_name, file_paths, overrides=overrides)
         else:
             self.status_bar.showMessage(f"Job {job_name} créé (aucun fichier — en attente)")
 

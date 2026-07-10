@@ -307,6 +307,14 @@ class NestingEngine:
     def process(self, items: List[FileItem], settings: JobSettings) -> List[Sheet]:
         """
         Takes a list of FileItems and JobSettings, and returns a list of configured Sheets.
+
+        Margin handling lives here rather than in each strategy: the strategy
+        packs into a sheet shrunk by 2*margin on each axis (so it never places
+        anything closer to the edge than the margin), then every resulting
+        PlacedItem is shifted by +margin and the Sheet's own width/height are
+        restored to the full, unshrunk size — the margin just ends up as
+        empty space around the packed area. This keeps ShelfNestingStrategy /
+        RectpackNestingStrategy untouched (and their existing tests valid).
         """
         # Only nest items that are OK or WARNING (already corrected)
         # In a real workflow, we might only pass items with PreflightStatus.OK.
@@ -316,4 +324,34 @@ class NestingEngine:
             if item.preflight_status in (PreflightStatus.OK, PreflightStatus.WARNING)
         ]
 
-        return self.strategy.pack(valid_items, settings)
+        margin = settings.margin_mm or 0.0
+        if margin <= 0:
+            return self.strategy.pack(valid_items, settings)
+
+        usable_w = settings.sheet_width_mm - 2 * margin
+        usable_h = settings.sheet_height_mm - 2 * margin
+        if usable_w <= 0 or usable_h <= 0:
+            logger.warning(
+                f"Margin {margin}mm leaves no usable space on a "
+                f"{settings.sheet_width_mm}x{settings.sheet_height_mm}mm sheet."
+            )
+            return []
+
+        usable_settings = settings.model_copy(
+            update={"sheet_width_mm": usable_w, "sheet_height_mm": usable_h}
+        )
+        sheets = self.strategy.pack(valid_items, usable_settings)
+
+        for sheet in sheets:
+            sheet.width_mm = settings.sheet_width_mm
+            sheet.height_mm = settings.sheet_height_mm
+            for placed_item in sheet.items:
+                placed_item.x_mm += margin
+                placed_item.y_mm += margin
+            # fill_rate was computed against the shrunk usable area; recompute
+            # against the true full sheet area to reflect the margin correctly.
+            sheet_area = settings.sheet_width_mm * settings.sheet_height_mm
+            placed_area = sum(pi.width_mm * pi.height_mm for pi in sheet.items)
+            sheet.fill_rate = (placed_area / sheet_area) * 100.0 if sheet_area > 0 else 0.0
+
+        return sheets

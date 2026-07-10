@@ -1,7 +1,7 @@
 import asyncio
 import threading
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 from uuid import UUID
 
 from PySide6.QtCore import QThread, Signal
@@ -54,13 +54,24 @@ class WorkerPoolThread(QThread):
             self.pool_manager.start()
         self.ready_event.set()
 
-    def submit_job(self, job_id: UUID, file_paths: List[Path], settings: JobSettings):
-        """Thread-safe submission of one chunk from the main UI thread."""
+    def submit_job(
+        self,
+        job_id: UUID,
+        file_paths: List[Path],
+        settings: JobSettings,
+        quantities: Optional[Dict[str, int]] = None,
+    ):
+        """Thread-safe submission of one chunk from the main UI thread.
+
+        `quantities` (path string -> quantity) lets the caller override a
+        specific file's FileItem.quantity, e.g. to print several copies of
+        one file on the sheet — see job_processor.process_job_files.
+        """
         self.ready_event.wait()
         if self.pool_manager is None or self.loop is None:
             return
         asyncio.run_coroutine_threadsafe(
-            self.pool_manager.submit_job(job_id, file_paths, settings),
+            self.pool_manager.submit_job(job_id, file_paths, settings, quantities),
             self.loop
         )
         self.job_started.emit(str(job_id))

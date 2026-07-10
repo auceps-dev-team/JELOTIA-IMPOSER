@@ -100,11 +100,14 @@ class SettingsWidget(QWidget):
         self.sheet_height.setMaximum(2000)
         
         self.spacing = self._style_input(QSpinBox())
+        self.margin = self._style_input(QSpinBox())
+        self.margin.setMaximum(500)
         self.rotation_allowed = QCheckBox("Autoriser la rotation automatique")
-        
+
         layout.addRow("Largeur Planche (mm):", self.sheet_width)
         layout.addRow("Hauteur Planche (mm):", self.sheet_height)
         layout.addRow("Espacement entre poses (mm):", self.spacing)
+        layout.addRow("Marge autour de la planche (mm):", self.margin)
         layout.addRow("", self.rotation_allowed)
         
     def setup_tab_preflight(self):
@@ -229,6 +232,7 @@ class SettingsWidget(QWidget):
         self.sheet_width.setValue(self.config.get("imposition", "sheet_width") or 320)
         self.sheet_height.setValue(self.config.get("imposition", "sheet_height") or 450)
         self.spacing.setValue(self.config.get("imposition", "spacing") or 5)
+        self.margin.setValue(self.config.get("imposition", "margin") or 0)
         self.rotation_allowed.setChecked(self.config.get("imposition", "rotation_allowed") or False)
         
         # Preflight
@@ -279,6 +283,7 @@ class SettingsWidget(QWidget):
         self.config.set("imposition", "sheet_width", self.sheet_width.value())
         self.config.set("imposition", "sheet_height", self.sheet_height.value())
         self.config.set("imposition", "spacing", self.spacing.value())
+        self.config.set("imposition", "margin", self.margin.value())
         self.config.set("imposition", "rotation_allowed", self.rotation_allowed.isChecked())
         
         # Preflight

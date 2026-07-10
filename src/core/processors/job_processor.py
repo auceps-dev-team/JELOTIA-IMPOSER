@@ -1,7 +1,7 @@
 import logging
 import shutil
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 from uuid import UUID
 
 from src.core.engines.correction_engine import CorrectionEngine
@@ -14,7 +14,10 @@ logger = logging.getLogger(__name__)
 
 
 def process_job_files(
-    job_id: UUID, file_paths: List[Path], settings: JobSettings
+    job_id: UUID,
+    file_paths: List[Path],
+    settings: JobSettings,
+    quantities: Optional[Dict[str, int]] = None,
 ) -> List[FileItem]:
     """
     Processes a list of file paths for a single job (or a chunk of one — see
@@ -29,6 +32,12 @@ def process_job_files(
             in the same job_temp_dir for finalize_job_sheets to pick up.
         file_paths (List[Path]): The raw files to process.
         settings (JobSettings): The settings associated with the Job.
+        quantities (dict, optional): Maps a source path (str) to how many
+            copies of it should end up on the sheet — lets the user print
+            several exemplars of one file alongside others in the same job.
+            Every FileItem produced from that path (e.g. every page of a
+            multi-page PDF) gets the same override. Defaults to 1 (unchanged
+            behavior) for paths not present in the map.
 
     Returns:
         List[FileItem]: The fully processed FileItems.
@@ -54,6 +63,11 @@ def process_job_files(
             # 1. Import (Extracts metadata, creates FileItem(s))
             # Handle multi-page PDFs which return multiple FileItems
             file_items = import_engine.process_file(job_id, file_path, min_dpi=settings.min_dpi)
+
+            requested_qty = (quantities or {}).get(str(file_path))
+            if requested_qty:
+                for item in file_items:
+                    item.quantity = requested_qty
 
             for item in file_items:
                 if item.preflight_status == PreflightStatus.ERROR:
