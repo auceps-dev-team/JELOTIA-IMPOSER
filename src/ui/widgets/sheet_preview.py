@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.core.models.domain import JobSettings, Sheet
+from src.database.repository import DatabaseRepository
 
 
 class ZoomableView(QGraphicsView):
@@ -70,6 +71,7 @@ class SheetPreviewWidget(QWidget):
         self.current_index = 0
 
         self.editor_widget = None  # lazily-created SheetEditorWidget for the current sheet
+        self.db = DatabaseRepository()
 
         self.setup_ui()
 
@@ -369,6 +371,11 @@ class SheetPreviewWidget(QWidget):
                 job_name=self.job_name,
             )
             sheet.export_path = next(iter(results.values()))
+
+            # Persist the edit (repositioning, rotation, resize, added items)
+            # so it survives an app restart — regenerating the exported PDF
+            # alone previously left the DB with the pre-edit layout.
+            self.db.update_job_sheets(str(sheet.job_id), self.sheets)
         except Exception as e:
             QMessageBox.warning(self, "Erreur", f"Échec de la régénération de la planche : {e}")
         finally:

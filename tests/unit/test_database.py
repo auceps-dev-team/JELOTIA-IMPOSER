@@ -2,7 +2,7 @@ import uuid
 
 import pytest
 
-from src.core.models.domain import ColorMode, FileFormat, FileItem, Job, JobSettings, Sheet
+from src.core.models.domain import ColorMode, FileFormat, FileItem, Job, JobSettings, PlacedItem, Sheet
 from src.database.repository import DatabaseRepository
 
 
@@ -110,6 +110,36 @@ def test_update_job_files_and_sheets(repo):
     assert len(db_job.files) == 1
     assert len(db_job.sheets) == 1
     assert db_job.sheets[0].fill_rate == 42.0
+
+
+def test_update_job_sheets_persists_placed_items(repo):
+    """Regression test: a Sheet whose items are real PlacedItems (UUID
+    file_item_id, Path source_path) must round-trip through the sheets.items
+    JSON column. model_dump() in "python" mode leaves those as UUID/Path
+    objects, which SQLAlchemy's default JSON serializer can't encode — every
+    real sheet (as opposed to the empty-items Sheet used above) hit this."""
+    job_id = str(uuid.uuid4())
+    repo.create_job_stub(job_id, "Placed Items Job", ["a.pdf"], JobSettings())
+
+    file_item_id = uuid.uuid4()
+    sheet = Sheet(
+        job_id=uuid.UUID(job_id), sheet_number=1,
+        items=[
+            PlacedItem(
+                file_item_id=file_item_id, source_path="a.pdf",
+                x_mm=1.0, y_mm=2.0, width_mm=50.0, height_mm=80.0, rotated=True,
+            )
+        ],
+    )
+    assert repo.update_job_sheets(job_id, [sheet]) is True
+
+    db_job = repo.get_job(job_id)
+    assert len(db_job.sheets) == 1
+    persisted_items = db_job.sheets[0].items
+    assert len(persisted_items) == 1
+    assert persisted_items[0]["file_item_id"] == str(file_item_id)
+    assert persisted_items[0]["rotated"] is True
+    assert persisted_items[0]["width_mm"] == 50.0
 
 
 def test_recover_processing_jobs_resets_to_pending(repo):

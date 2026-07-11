@@ -106,7 +106,7 @@ class DatabaseRepository:
                     height_mm=sheet.height_mm,
                     fill_rate=sheet.fill_rate,
                     export_path=str(sheet.export_path) if sheet.export_path else None,
-                    items=[item.model_dump() for item in sheet.items],
+                    items=[item.model_dump(mode="json") for item in sheet.items],
                 )
                 session.add(db_sheet)
 
@@ -241,7 +241,7 @@ class DatabaseRepository:
                     height_mm=sheet.height_mm,
                     fill_rate=sheet.fill_rate,
                     export_path=str(sheet.export_path) if sheet.export_path else None,
-                    items=[item.model_dump() for item in sheet.items],
+                    items=[item.model_dump(mode="json") for item in sheet.items],
                 )
                 session.add(db_sheet)
 
