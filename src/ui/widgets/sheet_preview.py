@@ -4,7 +4,7 @@ from typing import List, Optional
 
 import fitz  # PyMuPDF
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QImage, QPainter, QPixmap, QWheelEvent
+from PySide6.QtGui import QColor, QImage, QPainter, QPixmap, QWheelEvent
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QInputDialog,
     QLabel,
     QMessageBox,
+    QProgressBar,
     QPushButton,
     QStackedWidget,
     QVBoxLayout,
@@ -32,6 +33,9 @@ from src.core.models.domain import (
     Sheet,
 )
 from src.database.repository import DatabaseRepository
+from src.ui.theme import ThemeManager
+
+_T = ThemeManager
 
 
 def _file_item_from_model(model) -> FileItem:
@@ -64,7 +68,7 @@ class ZoomableView(QGraphicsView):
         self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.setBackgroundBrush(Qt.GlobalColor.darkGray)
+        self.setBackgroundBrush(QColor(_T.BG_APP))
         self.setFrameShape(QFrame.Shape.NoFrame)
 
         self._zoom = 0
@@ -117,31 +121,43 @@ class SheetPreviewWidget(QWidget):
         # Toolbar
         self.setup_toolbar()
 
-        # Content stack: raster preview (index 0) vs interactive editor (index 1)
+        # Body: content stack (raster preview vs interactive editor) + the
+        # TÉLÉMÉTRIE.PLANCHE side panel.
+        body = QHBoxLayout()
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(0)
+
         self.content_stack = QStackedWidget()
         self.content_stack.addWidget(self.view)
-        self.main_layout.addWidget(self.content_stack)
+        body.addWidget(self.content_stack, 1)
+
+        self.telemetry_panel = self._build_telemetry_panel()
+        body.addWidget(self.telemetry_panel)
+
+        self.main_layout.addLayout(body, 1)
 
     def setup_toolbar(self):
         self.toolbar_layout = QHBoxLayout()
-        self.toolbar_layout.setContentsMargins(10, 10, 10, 10)
+        self.toolbar_layout.setContentsMargins(16, 10, 16, 10)
+        self.toolbar_layout.setSpacing(8)
 
         self.info_label = QLabel("Aucun aperçu")
-        self.info_label.setStyleSheet("font-weight: bold;")
 
-        self.btn_prev = QPushButton("◀ Précédent")
+        self.btn_prev = QPushButton("◀ PREC")
         self.sheet_counter_label = QLabel("")
-        self.btn_next = QPushButton("Suivant ▶")
+        self.sheet_counter_label.setStyleSheet(f"color:{_T.ACCENT_TEXT}; font-weight:600; padding:0 8px;")
+        self.btn_next = QPushButton("SUIV ▶")
         self.btn_prev.clicked.connect(self._show_previous_sheet)
         self.btn_next.clicked.connect(self._show_next_sheet)
 
-        self.btn_zoom_in = QPushButton("+")
-        self.btn_zoom_out = QPushButton("-")
-        self.btn_fit = QPushButton("Ajuster")
-        self.btn_edit = QPushButton("Éditer la disposition")
+        self.btn_zoom_in = QPushButton("＋")
+        self.btn_zoom_out = QPushButton("−")
+        self.btn_fit = QPushButton("AJUSTER")
+        self.btn_edit = QPushButton("ÉDITER.DISPO")
         self.btn_edit.setCheckable(True)
-        self.btn_export = QPushButton("Exporter la planche")
-        self.btn_export_all = QPushButton("Exporter tout")
+        self.btn_export = QPushButton("[EXPORT PLANCHE]")
+        self.btn_export_all = QPushButton("[EXPORT TOUT]")
+        self.btn_export_all.setObjectName("primary")
 
         self.btn_zoom_in.clicked.connect(lambda: self.view.scale(1.25, 1.25))
         self.btn_zoom_out.clicked.connect(lambda: self.view.scale(0.8, 0.8))
@@ -156,9 +172,9 @@ class SheetPreviewWidget(QWidget):
         self.toolbar_layout.addWidget(self.sheet_counter_label)
         self.toolbar_layout.addWidget(self.btn_next)
         self.toolbar_layout.addStretch()
-        self.toolbar_layout.addWidget(self.btn_zoom_in)
         self.toolbar_layout.addWidget(self.btn_zoom_out)
         self.toolbar_layout.addWidget(self.btn_fit)
+        self.toolbar_layout.addWidget(self.btn_zoom_in)
         self.toolbar_layout.addWidget(self.btn_edit)
         self.toolbar_layout.addWidget(self.btn_export)
         self.toolbar_layout.addWidget(self.btn_export_all)
@@ -166,7 +182,88 @@ class SheetPreviewWidget(QWidget):
         # Overlay wrapper
         self.toolbar_widget = QWidget()
         self.toolbar_widget.setLayout(self.toolbar_layout)
+        self.toolbar_widget.setStyleSheet(
+            f"background-color:{_T.BG_PANEL}; border-bottom:1px solid {_T.BORDER};"
+        )
         self.main_layout.addWidget(self.toolbar_widget)
+
+    def _build_telemetry_panel(self) -> QFrame:
+        panel = QFrame()
+        panel.setFixedWidth(300)
+        panel.setStyleSheet(
+            f"QFrame {{ background-color:{_T.BG_PANEL}; border-left:1px solid {_T.BORDER}; }}"
+        )
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(6)
+
+        title = QLabel("┌ TÉLÉMÉTRIE.PLANCHE")
+        title.setStyleSheet(
+            f"color:{_T.TEXT_2}; font-weight:600; font-size:12px; letter-spacing:1.5px; "
+            f"border:none; margin-bottom:6px;"
+        )
+        layout.addWidget(title)
+
+        self._telemetry_rows: dict[str, QLabel] = {}
+        for key, label in (
+            ("format", "FORMAT"),
+            ("poses", "POSES"),
+            ("rotation", "ROTATION"),
+            ("espacement", "ESPACEMENT"),
+            ("remplissage", "REMPLISSAGE"),
+            ("chutes", "CHUTES"),
+            ("sortie", "SORTIE"),
+            ("profil", "PROFIL"),
+        ):
+            row = QLabel("—")
+            row.setStyleSheet("border:none; font-size:12px;")
+            layout.addWidget(row)
+            self._telemetry_rows[key] = row
+            if key == "remplissage":
+                self._telemetry_bar = QProgressBar()
+                self._telemetry_bar.setFixedHeight(8)
+                self._telemetry_bar.setTextVisible(False)
+                self._telemetry_bar.setRange(0, 100)
+                layout.addWidget(self._telemetry_bar)
+
+        layout.addStretch()
+        return panel
+
+    def _telemetry_line(self, label: str, value: str, value_color: str = None) -> str:
+        pad = "." * max(1, 14 - len(label))
+        value_color = value_color or _T.TEXT_1
+        return (
+            f'<span style="color:{_T.TEXT_MUTE}">{label}{pad}</span> '
+            f'<span style="color:{value_color}">{value}</span>'
+        )
+
+    def _update_telemetry(self) -> None:
+        sheet = self.current_sheet
+        if sheet is None or self.settings is None:
+            for row in self._telemetry_rows.values():
+                row.setText("—")
+            self._telemetry_bar.setValue(0)
+            return
+
+        from src.utils.config_manager import ConfigManager
+
+        poses = len(sheet.items)
+        rotated = sum(1 for it in sheet.items if it.rotated)
+        fill = sheet.fill_rate
+        icc = ConfigManager().get("export", "icc_profile") or "—"
+
+        rows = self._telemetry_rows
+        rows["format"].setText(self._telemetry_line("FORMAT", f"{sheet.width_mm:.0f}×{sheet.height_mm:.0f}"))
+        rows["poses"].setText(self._telemetry_line("POSES", str(poses)))
+        rows["rotation"].setText(self._telemetry_line("ROTATION", f"{rotated} AUTO", _T.STATE_OK))
+        rows["espacement"].setText(self._telemetry_line("ESPACEMENT", f"{self.settings.gap_mm:.0f} MM"))
+        rows["remplissage"].setText(self._telemetry_line("REMPLISSAGE", f"{fill:.1f}%", _T.ACCENT_TEXT))
+        rows["chutes"].setText(self._telemetry_line("CHUTES", f"{100 - fill:.1f}%"))
+        rows["sortie"].setText(
+            self._telemetry_line("SORTIE", f"{self.settings.export_format}/{self.settings.export_dpi}DPI")
+        )
+        rows["profil"].setText(self._telemetry_line("PROFIL", icc))
+        self._telemetry_bar.setValue(round(max(0.0, min(100.0, fill))))
 
     # ------------------------------------------------------------------ #
     #  Multi-sheet job loading / navigation                                #
@@ -186,10 +283,11 @@ class SheetPreviewWidget(QWidget):
         if not self.sheets:
             self.info_label.setText("Aucun aperçu")
             self.sheet_counter_label.setText("")
+            self._update_telemetry()
             return
 
         total = len(self.sheets)
-        self.sheet_counter_label.setText(f"Planche {self.current_index + 1}/{total}")
+        self.sheet_counter_label.setText(f"PLANCHE {self.current_index + 1:02d}/{total:02d}")
         self.btn_prev.setEnabled(self.current_index > 0)
         self.btn_next.setEnabled(self.current_index < total - 1)
 
@@ -198,6 +296,7 @@ class SheetPreviewWidget(QWidget):
             self.load_pdf(str(sheet.export_path), fill_rate=sheet.fill_rate)
         else:
             self.info_label.setText(f"Planche {sheet.sheet_number} — fichier introuvable")
+        self._update_telemetry()
 
     def _show_previous_sheet(self):
         if self.current_index > 0:
@@ -416,4 +515,4 @@ class SheetPreviewWidget(QWidget):
             QApplication.restoreOverrideCursor()
 
         self._teardown_editor(revert=False)  # keep the applied positions
-        self._show_current_sheet()
+        self._show_current_sheet()  # also refreshes the telemetry panel

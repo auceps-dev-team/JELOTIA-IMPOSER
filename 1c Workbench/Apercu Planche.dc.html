@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#141517; font-family:'IBM Plex Mono',monospace; overflow:hidden; }
+  a { color:#FF9A4D; text-decoration:none; } a:hover { color:#FFB35C; }
+</style>
+</helmet>
+
+<div style="width:100vw; height:100vh; background:#141517; display:flex; flex-direction:column; overflow:hidden;">
+  <div style="height:36px; background:#1B1D20; border-bottom:1px solid #33363B; display:flex; align-items:center; padding:0 0 0 12px; flex:none;">
+    <div style="width:14px; height:14px; background:#FF7A1A;"></div>
+    <div style="font:600 11px 'IBM Plex Mono'; color:#C8CBD0; margin-left:10px; letter-spacing:1px; flex:1;">JELOTIA::IMPOSER — JOB-37B038D6/PLANCHE_01</div>
+    <div style="display:flex;"><div style="width:46px; text-align:center; color:#8B8F96; font-size:12px;">─</div><div style="width:46px; text-align:center; color:#8B8F96; font-size:12px;">▢</div><div style="width:46px; text-align:center; color:#8B8F96; font-size:12px;">✕</div></div>
+  </div>
+  <div style="height:44px; background:#1B1D20; border-bottom:1px solid #33363B; display:flex; align-items:stretch; flex:none;">
+    <a href="Dashboard.dc.html" style="display:flex; align-items:center; padding:0 22px; border-right:1px solid #33363B; font:400 12px 'IBM Plex Mono'; color:#8B8F96; letter-spacing:1px;">F1·DASHBOARD</a>
+    <a href="Jobs.dc.html" style="display:flex; align-items:center; padding:0 22px; border-right:1px solid #33363B; font:400 12px 'IBM Plex Mono'; color:#8B8F96; letter-spacing:1px;">F2·JOBS</a>
+    <a href="Apercu Planche.dc.html" style="display:flex; align-items:center; padding:0 22px; background:#26282C; border-right:1px solid #33363B; border-top:2px solid #FF7A1A; font:600 12px 'IBM Plex Mono'; color:#FF9A4D; letter-spacing:1px;">F3·PLANCHES</a>
+    <a href="Parametres.dc.html" style="display:flex; align-items:center; padding:0 22px; border-right:1px solid #33363B; font:400 12px 'IBM Plex Mono'; color:#8B8F96; letter-spacing:1px;">F4·CONFIG</a>
+  </div>
+  <div style="height:44px; background:#1B1D20; border-bottom:1px solid #33363B; display:flex; align-items:center; gap:8px; padding:0 16px; flex:none;">
+    <div style="border:1px solid #33363B; padding:6px 12px; font:400 12px 'IBM Plex Mono'; color:#C8CBD0; cursor:pointer;">◀ PREC</div>
+    <div style="border:1px solid #33363B; padding:6px 12px; font:600 12px 'IBM Plex Mono'; color:#FF9A4D;">PLANCHE 01/01</div>
+    <div style="border:1px solid #33363B; padding:6px 12px; font:400 12px 'IBM Plex Mono'; color:#C8CBD0; cursor:pointer;">SUIV ▶</div>
+    <div onClick="{{ zoomOut }}" style="border:1px solid #33363B; padding:6px 12px; font:400 12px 'IBM Plex Mono'; color:#C8CBD0; margin-left:14px; cursor:pointer;">−</div>
+    <div style="border:1px solid #33363B; padding:6px 12px; font:600 12px 'IBM Plex Mono'; color:#C8CBD0;">{{ zoomLabel }}</div>
+    <div onClick="{{ zoomIn }}" style="border:1px solid #33363B; padding:6px 12px; font:400 12px 'IBM Plex Mono'; color:#C8CBD0; cursor:pointer;">＋</div>
+    <div onClick="{{ zoomFit }}" style="border:1px solid #33363B; padding:6px 12px; font:400 12px 'IBM Plex Mono'; color:#C8CBD0; cursor:pointer;">AJUSTER</div>
+    <div style="margin-left:auto; display:flex; gap:8px;">
+      <div style="border:1px solid #33363B; padding:6px 12px; font:400 12px 'IBM Plex Mono'; color:#C8CBD0; cursor:pointer;">ÉDITER.DISPO</div>
+      <div style="border:1px solid #FF7A1A; padding:6px 12px; font:600 12px 'IBM Plex Mono'; color:#FF9A4D; cursor:pointer;">[EXPORT PLANCHE]</div>
+      <div style="border:1px solid #FF7A1A; background:#FF7A1A; padding:6px 12px; font:600 12px 'IBM Plex Mono'; color:#141517; cursor:pointer;">[EXPORT TOUT]</div>
+    </div>
+  </div>
+  <div style="flex:1; display:flex; min-height:0;">
+    <div style="flex:1; position:relative; background:repeating-linear-gradient(0deg,#17181B 0 24px,#191A1E 24px 25px), repeating-linear-gradient(90deg,#17181B 0 24px,#191A1E 24px 25px); display:flex; align-items:center; justify-content:center; overflow:hidden;">
+      <div style="position:absolute; top:14px; left:18px; font:400 11px 'IBM Plex Mono'; color:#8B8F96;">X: 284.5 MM &nbsp; Y: 102.3 MM</div>
+      <div style="width:430px; height:664px; background:#FDFDFC; outline:1px solid #FF7A1A; outline-offset:6px; padding:14px; box-sizing:border-box; transform: {{ zoomTransform }}; transition:transform .15s ease;">
+        <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:6px;">
+          <sc-for list="{{ t15 }}" as="t" hint-placeholder-count="15">
+            <div style="height:112px; background:#F7F6F2; border:1px solid #D9D8D2; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;">
+              <div style="width:30px; height:5px; background:#C9C8C0;"></div>
+              <div style="width:36px; height:36px; background:#2E2E30;"></div>
+              <div style="width:44px; height:3px; background:#C9C8C0;"></div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-top:9px;">
+          <sc-for list="{{ t8 }}" as="t" hint-placeholder-count="8">
+            <div style="height:66px; background:#F7F6F2; border:1px solid #D9D8D2; display:flex; align-items:center; justify-content:center; gap:8px;">
+              <div style="width:30px; height:30px; background:#2E2E30;"></div>
+              <div style="display:flex; flex-direction:column; gap:4px;"><div style="width:26px; height:4px; background:#C9C8C0;"></div><div style="width:20px; height:3px; background:#C9C8C0;"></div></div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+    <div style="width:300px; background:#1B1D20; border-left:1px solid #33363B; padding:20px; display:flex; flex-direction:column; gap:4px; flex:none; font:400 12px/1.9 'IBM Plex Mono';">
+      <div style="font:600 12px 'IBM Plex Mono'; color:#C8CBD0; letter-spacing:1.5px; margin-bottom:8px;">┌ TELEMETRIE.PLANCHE</div>
+      <div style="color:#8B8F96;">FORMAT........ <span style="color:#E8EAED;">580×896</span></div>
+      <div style="color:#8B8F96;">POSES......... <span style="color:#E8EAED;">23</span></div>
+      <div style="color:#8B8F96;">ROTATION...... <span style="color:#4DD97E;">8 AUTO</span></div>
+      <div style="color:#8B8F96;">ESPACEMENT.... <span style="color:#E8EAED;">3 MM</span></div>
+      <div style="color:#8B8F96;">REMPLISSAGE... <span style="color:#FF9A4D;">86.9%</span></div>
+      <div style="width:100%; height:8px; background:#26282C; margin:6px 0 10px;"><div style="width:86.9%; height:8px; background:#FF7A1A;"></div></div>
+      <div style="color:#8B8F96;">CHUTES........ <span style="color:#E8EAED;">13.1%</span></div>
+      <div style="color:#8B8F96;">SORTIE........ <span style="color:#E8EAED;">PDF/300DPI</span></div>
+      <div style="color:#8B8F96;">PROFIL........ <span style="color:#E8EAED;">FOGRA39</span></div>
+      <div style="margin-top:auto; border-top:1px solid #33363B; padding-top:12px; color:#4DD97E;">✓ JOB TERMINÉ — 1 PLANCHE</div>
+    </div>
+  </div>
+  <div style="height:32px; background:#1B1D20; border-top:1px solid #33363B; display:flex; align-items:center; gap:20px; padding:0 18px; font:400 11px 'IBM Plex Mono'; color:#8B8F96; flex:none;">
+    <div style="display:flex; align-items:center; gap:6px;"><div style="width:7px; height:7px; border-radius:50%; background:#4DD97E;"></div>PRÊT</div>
+    <div style="margin-left:auto; color:#FF9A4D;">F3·PLANCHES — ZOOM {{ zoomLabel }}</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { zoom: 100 };
+  renderVals() {
+    const z = this.state.zoom;
+    return {
+      t15: Array.from({ length: 15 }, (_, i) => ({ i })),
+      t8: Array.from({ length: 8 }, (_, i) => ({ i })),
+      zoomLabel: z + '%',
+      zoomTransform: 'scale(' + (z / 100) + ')',
+      zoomIn: () => this.setState(s => ({ zoom: Math.min(200, s.zoom + 10) })),
+      zoomOut: () => this.setState(s => ({ zoom: Math.max(40, s.zoom - 10) })),
+      zoomFit: () => this.setState({ zoom: 100 })
+    };
+  }
+}
+</script>
+</body>
+</html>

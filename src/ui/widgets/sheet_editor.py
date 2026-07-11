@@ -24,11 +24,14 @@ from PySide6.QtWidgets import (
 )
 
 from src.core.models.domain import FileItem, JobSettings, PlacedItem, PreflightStatus, Sheet
+from src.ui.theme import ThemeManager
 
-_ITEM_BRUSH = QBrush(QColor(217, 122, 39, 160))
-_ITEM_PEN = QPen(QColor(60, 30, 0, 220))
+_T = ThemeManager
+
+_ITEM_BRUSH = QBrush(QColor(255, 122, 26, 150))
+_ITEM_PEN = QPen(QColor(_T.BORDER_FIELD))
 _ITEM_PEN.setWidthF(0.6)
-_OVERLAP_PEN = QPen(QColor(220, 30, 30))
+_OVERLAP_PEN = QPen(QColor(_T.STATE_ERR))
 _OVERLAP_PEN.setWidthF(1.2)
 _LABEL_BACKDROP = QBrush(QColor(0, 0, 0, 150))
 _GRID_PEN = QPen(QColor(255, 255, 255, 40))
@@ -231,7 +234,7 @@ class SheetEditorWidget(QWidget):
         self.scene = QGraphicsScene(0, 0, sheet.width_mm, sheet.height_mm)
         boundary = self.scene.addRect(
             0, 0, sheet.width_mm, sheet.height_mm,
-            QPen(QColor(255, 255, 255, 120)), QBrush(QColor(45, 45, 45)),
+            QPen(QColor(_T.ACCENT)), QBrush(QColor(_T.BG_APP)),
         )
         boundary.setZValue(-10)
         self.scene.selectionChanged.connect(self._on_selection_changed)
@@ -243,7 +246,7 @@ class SheetEditorWidget(QWidget):
 
         self.view = _EditorView(self.scene, self)
         self.view.setRenderHint(QPainter.RenderHint.Antialiasing)
-        self.view.setBackgroundBrush(Qt.GlobalColor.darkGray)
+        self.view.setBackgroundBrush(QColor(_T.BG_PANEL))
         layout.addWidget(self.view)
 
         self._setup_tools_bar(layout)
@@ -253,13 +256,13 @@ class SheetEditorWidget(QWidget):
         bar = QHBoxLayout()
         bar.setContentsMargins(10, 6, 10, 6)
 
-        self.btn_add_file = QPushButton("+ Ajouter un fichier")
+        self.btn_add_file = QPushButton("[+ AJOUTER UN FICHIER]")
         self.btn_add_file.clicked.connect(self.add_file)
 
-        self.btn_rotate = QPushButton("Pivoter (R)")
+        self.btn_rotate = QPushButton("PIVOTER (R)")
         self.btn_rotate.clicked.connect(self.rotate_selected)
 
-        self.chk_snap = QCheckBox("Aligner sur grille")
+        self.chk_snap = QCheckBox("ALIGNER SUR GRILLE")
         self.chk_snap.toggled.connect(self._toggle_grid)
         self.spin_grid = QDoubleSpinBox()
         self.spin_grid.setRange(1.0, 200.0)
@@ -278,7 +281,7 @@ class SheetEditorWidget(QWidget):
         self.spin_height.setRange(1.0, 5000.0)
         self.spin_height.setSuffix(" mm")
         self.spin_height.setToolTip(self.spin_width.toolTip())
-        self.btn_resize = QPushButton("Appliquer la taille")
+        self.btn_resize = QPushButton("APPLIQUER LA TAILLE")
         self.btn_resize.clicked.connect(self._apply_resize)
 
         for w in (self.spin_width, self.spin_height, self.btn_resize):
@@ -307,8 +310,8 @@ class SheetEditorWidget(QWidget):
             "Glissez les éléments pour les repositionner. Sélectionnez un élément pour le "
             "pivoter ou changer sa taille."
         )
-        self.btn_cancel = QPushButton("Annuler")
-        self.btn_apply = QPushButton("Appliquer")
+        self.btn_cancel = QPushButton("ANNULER")
+        self.btn_apply = QPushButton("[APPLIQUER]")
         self.btn_apply.setObjectName("primary")
         bottom.addWidget(self.hint_label)
         bottom.addStretch()

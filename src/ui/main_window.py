@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMenu,
     QPushButton,
+    QSizePolicy,
     QStackedWidget,
     QSystemTrayIcon,
     QVBoxLayout,
@@ -20,6 +21,8 @@ from src.core.models.domain import JobSettings, PlacedItem, Sheet
 from src.core.output_manager import OutputManager
 from src.core.system_notifier import SystemNotifier
 from src.database.repository import DatabaseRepository
+from src.ui.theme import ThemeManager
+from src.ui.widgets.common import LedDot
 from src.ui.widgets.job_queue import JobsWidget
 from src.ui.widgets.settings_view import SettingsWidget
 
@@ -64,11 +67,11 @@ class MainWindow(QMainWindow):
 
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
-        self.main_layout = QHBoxLayout(self.central_widget)
+        self.main_layout = QVBoxLayout(self.central_widget)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.main_layout.setSpacing(0)
 
-        self.setup_sidebar()
+        self.setup_topnav()
         self.setup_stacked_widget()
 
         self.notifier = SystemNotifier(self)
@@ -205,7 +208,7 @@ class MainWindow(QMainWindow):
 
         # Only count once per logical job, not once per sub-job chunk.
         if group is None or group["started"] == 0:
-            self.status_bar.showMessage(f"Job {job_name} en cours...")
+            self._log(f"Job {job_name} en cours...")
             count = int(self.dashboard_view.card_active_jobs.value_label.text())
             self.dashboard_view.card_active_jobs.value_label.setText(str(count + 1))
             self.db.update_job_status(job_id, "PROCESSING")
@@ -258,7 +261,7 @@ class MainWindow(QMainWindow):
         self.dashboard_view.card_errors.value_label.setText(str(err_count + 1))
 
         if group is None:
-            self.status_bar.showMessage(f"Erreur — Job {job_name}")
+            self._log(f"Erreur — Job {job_name}")
             self.notifier.notify("Erreur Job", f"{job_name}: {error_msg}", True)
             self.jobs_view.update_job_status(job_id, "ERROR")
             self.db.update_job_status(job_id, "ERROR")
@@ -325,7 +328,7 @@ class MainWindow(QMainWindow):
         the Jobs row, notifies, shows the aggregated preflight dialog once,
         and updates dashboard counters exactly once per logical job."""
         status = "ERROR" if errored else "DONE"
-        self.status_bar.showMessage(f"Job {job_name} terminé — {sheet_count} planche(s)")
+        self._log(f"Job {job_name} terminé — {sheet_count} planche(s)")
         self.notifier.notify("Job Terminé", f"{job_name} — {sheet_count} planche(s) générée(s).", errored)
         self.jobs_view.update_job_status(job_id, status, sheet_count)
 
@@ -344,44 +347,43 @@ class MainWindow(QMainWindow):
         self.dashboard_view.card_errors.value_label.setText(str(err_count + 1))
 
     # ------------------------------------------------------------------ #
-    #  Sidebar                                                             #
+    #  Top navigation (F1-F4)                                              #
     # ------------------------------------------------------------------ #
 
-    def setup_sidebar(self):
-        self.sidebar = QFrame()
-        self.sidebar.setObjectName("sidebar")
-        self.sidebar.setFixedWidth(250)
+    def setup_topnav(self):
+        self.topnav = QFrame()
+        self.topnav.setObjectName("topnav")
+        self.topnav.setFixedHeight(44)
 
-        self.sidebar_layout = QVBoxLayout(self.sidebar)
-        self.sidebar_layout.setContentsMargins(0, 20, 0, 0)
-        self.sidebar_layout.setSpacing(5)
+        layout = QHBoxLayout(self.topnav)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
-        title_label = QLabel("JELOTIA IMPOSER")
-        title_label.setStyleSheet(
-            "color: white; font-size: 18px; font-weight: bold; padding: 10px 20px;"
-        )
-        self.sidebar_layout.addWidget(title_label)
-        self.sidebar_layout.addSpacing(20)
+        self.btn_dashboard = QPushButton("F1·DASHBOARD")
+        self.btn_jobs = QPushButton("F2·JOBS")
+        self.btn_planches = QPushButton("F3·PLANCHES")
+        self.btn_settings = QPushButton("F4·CONFIG")
+        self._nav_buttons = (self.btn_dashboard, self.btn_jobs, self.btn_planches, self.btn_settings)
 
-        self.btn_dashboard = QPushButton("Dashboard")
-        self.btn_dashboard.setCheckable(True)
-        self.btn_dashboard.setChecked(True)
-
-        self.btn_jobs = QPushButton("Jobs & Files")
-        self.btn_jobs.setCheckable(True)
-
-        self.btn_settings = QPushButton("Settings")
-        self.btn_settings.setCheckable(True)
-
-        self.sidebar_layout.addWidget(self.btn_dashboard)
-        self.sidebar_layout.addWidget(self.btn_jobs)
-        self.sidebar_layout.addWidget(self.btn_settings)
-        self.sidebar_layout.addStretch()
-        self.main_layout.addWidget(self.sidebar)
+        for btn in self._nav_buttons:
+            btn.setCheckable(True)
+            btn.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+            layout.addWidget(btn)
+        layout.addStretch()
+        self.main_layout.addWidget(self.topnav)
 
         self.btn_dashboard.clicked.connect(lambda: self.switch_view(0, self.btn_dashboard))
         self.btn_jobs.clicked.connect(lambda: self.switch_view(1, self.btn_jobs))
+        self.btn_planches.clicked.connect(lambda: self.switch_view(2, self.btn_planches))
         self.btn_settings.clicked.connect(lambda: self.switch_view(3, self.btn_settings))
+
+        self._set_active_nav(self.btn_dashboard)
+
+    def _set_active_nav(self, button: QPushButton) -> None:
+        for btn in self._nav_buttons:
+            btn.setChecked(btn is button)
+        if hasattr(self, "_status_context_label"):
+            self._status_context_label.setText(button.text())
 
     # ------------------------------------------------------------------ #
     #  Stacked widget                                                      #
@@ -415,10 +417,11 @@ class MainWindow(QMainWindow):
         if file_paths:
             self._submit_job(job_name, file_paths, overrides=overrides)
         else:
-            self.status_bar.showMessage(f"Job {job_name} créé (aucun fichier — en attente)")
+            self._log(f"Job {job_name} créé (aucun fichier — en attente)")
 
     def show_preview(self, job_name: str):
         self.stacked_widget.setCurrentWidget(self.preview_view)
+        self._set_active_nav(self.btn_planches)
         sheets = self._job_sheets.get(job_name, [])
         settings = self._job_settings.get(job_name)
         if sheets:
@@ -430,16 +433,31 @@ class MainWindow(QMainWindow):
 
     def switch_view(self, index: int, button: QPushButton):
         self.stacked_widget.setCurrentIndex(index)
-        for btn in (self.btn_dashboard, self.btn_jobs, self.btn_settings):
-            btn.setChecked(btn is button)
+        self._set_active_nav(button)
 
     # ------------------------------------------------------------------ #
     #  Status bar & tray                                                   #
     # ------------------------------------------------------------------ #
 
+    def _log(self, text: str) -> None:
+        """Shows `text` in the status bar and, if the dashboard is already
+        built, appends it to its rolling JOURNAL.SYSTEME panel — the single
+        place every status update flows through, instead of duplicating the
+        text at each call site."""
+        self.status_bar.showMessage(text)
+        if hasattr(self, "dashboard_view"):
+            self.dashboard_view.push_log(text)
+
     def setup_status_bar(self):
         self.status_bar = self.statusBar()
-        self.status_bar.showMessage("Prêt | 0 job actif")
+        self._status_led = LedDot(ThemeManager.STATE_OK, size=7, glow=False)
+        self.status_bar.addWidget(self._status_led)
+        self._status_context_label = QLabel(self.btn_dashboard.text())
+        self._status_context_label.setStyleSheet(
+            f"color:{ThemeManager.ACCENT_TEXT}; padding-right:8px; border:none; background:transparent;"
+        )
+        self.status_bar.addPermanentWidget(self._status_context_label)
+        self._log("PRÊT | 0 JOB ACTIF")
 
     def setup_system_tray(self):
         if not QSystemTrayIcon.isSystemTrayAvailable():
@@ -484,7 +502,7 @@ class MainWindow(QMainWindow):
 
     def _handle_hot_folder_job(self, group_name: str, files: list):
         self.jobs_view.add_job(group_name, len(files), "PENDING")
-        self.status_bar.showMessage(f"Hot Folder: {group_name} ({len(files)} fichier(s))")
+        self._log(f"Hot Folder: {group_name} ({len(files)} fichier(s))")
         self.notifier.notify("Nouveau Job", f"{group_name} — {len(files)} fichier(s)", False)
         self._submit_job(group_name, files)
 
@@ -499,12 +517,12 @@ class MainWindow(QMainWindow):
         try:
             recovered = self.db.recover_processing_jobs()
             if recovered:
-                self.status_bar.showMessage(
+                self._log(
                     f"{recovered} job(s) interrompu(s) remis en attente après redémarrage."
                 )
             jobs = self.db.get_all_jobs()
         except Exception as e:
-            self.status_bar.showMessage(f"Erreur de chargement des jobs sauvegardés : {e}")
+            self._log(f"Erreur de chargement des jobs sauvegardés : {e}")
             return
 
         for job in jobs:
@@ -538,7 +556,7 @@ class MainWindow(QMainWindow):
                             )
                         )
                     except Exception as e:
-                        self.status_bar.showMessage(f"Planche non restaurée pour {job.name} : {e}")
+                        self._log(f"Planche non restaurée pour {job.name} : {e}")
                 if restored_sheets:
                     self._job_sheets[job.name] = restored_sheets
 
@@ -559,7 +577,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ #
 
     def handle_cancel_job(self, job_name: str):
-        self.status_bar.showMessage(f"Job annulé: {job_name}")
+        self._log(f"Job annulé: {job_name}")
         self.notifier.notify("Job Annulé", job_name, False)
 
     def handle_resume_job(self, job_name: str):
@@ -568,13 +586,13 @@ class MainWindow(QMainWindow):
         updates the existing row (DB and table) instead of duplicating it."""
         source_paths = self._job_source_paths.get(job_name)
         if not source_paths:
-            self.status_bar.showMessage(
+            self._log(
                 f"Impossible de reprendre {job_name} : fichiers sources introuvables."
             )
             self.jobs_view.update_job_status(job_name, "ERROR")
             return
 
-        self.status_bar.showMessage(f"Job repris: {job_name}")
+        self._log(f"Job repris: {job_name}")
         self.notifier.notify("Job Repris", job_name, False)
         self._submit_job(job_name, source_paths, reuse_job_id=self._job_ids.get(job_name))
 

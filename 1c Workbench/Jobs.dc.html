@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#141517; font-family:'IBM Plex Mono',monospace; overflow:hidden; }
+  a { color:#FF9A4D; text-decoration:none; } a:hover { color:#FFB35C; }
+</style>
+</helmet>
+
+<div style="width:100vw; height:100vh; background:#141517; display:flex; flex-direction:column; overflow:hidden;">
+  <div style="height:36px; background:#1B1D20; border-bottom:1px solid #33363B; display:flex; align-items:center; padding:0 0 0 12px; flex:none;">
+    <div style="width:14px; height:14px; background:#FF7A1A;"></div>
+    <div style="font:600 11px 'IBM Plex Mono'; color:#C8CBD0; margin-left:10px; letter-spacing:1px; flex:1;">JELOTIA::IMPOSER v2.4</div>
+    <div style="display:flex;"><div style="width:46px; text-align:center; color:#8B8F96; font-size:12px;">─</div><div style="width:46px; text-align:center; color:#8B8F96; font-size:12px;">▢</div><div style="width:46px; text-align:center; color:#8B8F96; font-size:12px;">✕</div></div>
+  </div>
+  <div style="height:44px; background:#1B1D20; border-bottom:1px solid #33363B; display:flex; align-items:stretch; flex:none;">
+    <a href="Dashboard.dc.html" style="display:flex; align-items:center; padding:0 22px; border-right:1px solid #33363B; font:400 12px 'IBM Plex Mono'; color:#8B8F96; letter-spacing:1px;">F1·DASHBOARD</a>
+    <a href="Jobs.dc.html" style="display:flex; align-items:center; padding:0 22px; background:#26282C; border-right:1px solid #33363B; border-top:2px solid #FF7A1A; font:600 12px 'IBM Plex Mono'; color:#FF9A4D; letter-spacing:1px;">F2·JOBS</a>
+    <a href="Apercu Planche.dc.html" style="display:flex; align-items:center; padding:0 22px; border-right:1px solid #33363B; font:400 12px 'IBM Plex Mono'; color:#8B8F96; letter-spacing:1px;">F3·PLANCHES</a>
+    <a href="Parametres.dc.html" style="display:flex; align-items:center; padding:0 22px; border-right:1px solid #33363B; font:400 12px 'IBM Plex Mono'; color:#8B8F96; letter-spacing:1px;">F4·CONFIG</a>
+    <div style="margin-left:auto; display:flex; align-items:center; padding:0 20px;">
+      <div style="border:1px solid #FF7A1A; background:#FF7A1A; color:#141517; font:600 12px 'IBM Plex Mono'; padding:7px 16px; letter-spacing:1px; cursor:pointer;">[+ NOUVEAU JOB]</div>
+    </div>
+  </div>
+  <div style="flex:1; padding:18px; display:flex; flex-direction:column; gap:14px; min-height:0;">
+    <div style="display:flex; gap:10px;">
+      <div style="flex:1; background:#1B1D20; border:1px solid #33363B; padding:9px 14px; font:400 12px 'IBM Plex Mono'; color:#8B8F96;">&gt; RECHERCHER_JOB…</div>
+      <div onClick="{{ cycleFilter }}" style="background:#1B1D20; border:1px solid #33363B; padding:9px 14px; font:400 12px 'IBM Plex Mono'; color:#C8CBD0; cursor:pointer;">STATUT: {{ filterLabel }} ▾</div>
+      <div style="background:#1B1D20; border:1px solid #33363B; padding:9px 14px; font:400 12px 'IBM Plex Mono'; color:#C8CBD0;">TRI: DATE ▾</div>
+    </div>
+    <div style="flex:1; background:#1B1D20; border:1px solid #33363B; display:flex; flex-direction:column; min-height:0;">
+      <div style="display:grid; grid-template-columns:52px 1fr 110px 100px 100px 170px 130px; padding:10px 16px; border-bottom:1px solid #33363B; background:#202226; font:600 10px 'IBM Plex Mono'; color:#8B8F96; letter-spacing:1.5px;">
+        <div>NUM</div><div>NOM.JOB</div><div>STATUT</div><div>FICH.</div><div>PLANCHES</div><div>HORODATAGE</div><div style="text-align:right;">ACTION</div>
+      </div>
+      <sc-for list="{{ jobs }}" as="j" hint-placeholder-count="3">
+        <div style="display:grid; grid-template-columns:52px 1fr 110px 100px 100px 170px 130px; padding:13px 16px; border-bottom:1px solid #26282C; align-items:center;" style-hover="background:#26282C;">
+          <div style="font:400 12px 'IBM Plex Mono'; color:#8B8F96;">{{ j.n }}</div>
+          <div style="font:500 13px 'IBM Plex Mono'; color:#E8EAED;">{{ j.name }}</div>
+          <div style="font:600 12px 'IBM Plex Mono'; color: {{ j.fgC }};">[{{ j.status }}]</div>
+          <div style="font:400 13px 'IBM Plex Mono'; color:#C8CBD0;">{{ j.files }}</div>
+          <div style="font:400 13px 'IBM Plex Mono'; color:#C8CBD0;">{{ j.planches }}</div>
+          <div style="font:400 12px 'IBM Plex Mono'; color:#8B8F96;">{{ j.date }}</div>
+          <div style="text-align:right; font:600 12px 'IBM Plex Mono'; color:#FF9A4D; cursor:pointer;">DÉTAILS →</div>
+        </div>
+      </sc-for>
+      <div style="flex:1;"></div>
+      <div style="border-top:1px dashed #3C4046; padding:16px; text-align:center; font:400 12px 'IBM Plex Mono'; color:#8B8F96; letter-spacing:1px;">⤓ DROP PDF ICI → CRÉATION JOB MANUEL</div>
+    </div>
+    <div style="display:flex; gap:14px; font:400 11px 'IBM Plex Mono'; color:#8B8F96;">
+      <div style="background:#1B1D20; border:1px solid #33363B; padding:8px 14px;">TOTAL: {{ total }} JOBS</div>
+      <div style="background:#1B1D20; border:1px solid #33363B; padding:8px 14px;">FICHIERS: 1708</div>
+      <div style="background:#1B1D20; border:1px solid #33363B; padding:8px 14px;">FILE D'ATTENTE: 0</div>
+    </div>
+  </div>
+  <div style="height:32px; background:#1B1D20; border-top:1px solid #33363B; display:flex; align-items:center; gap:20px; padding:0 18px; font:400 11px 'IBM Plex Mono'; color:#8B8F96; flex:none;">
+    <div style="display:flex; align-items:center; gap:6px;"><div style="width:7px; height:7px; border-radius:50%; background:#4DD97E;"></div>PRÊT</div>
+    <div style="margin-left:auto; color:#FF9A4D;">F2·JOBS — {{ total }} ENTRÉES</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { filter: 'TOUS' };
+  renderVals() {
+    const all = [
+      { n: '01', name: 'AutoJob_1783620609_200.0x150.0', status: 'DONE', files: '2', planches: '1', date: '2026-07-09 14:32', fgC: '#4DD97E' },
+      { n: '02', name: 'JOB-CE5BF7F6', status: 'DONE', files: '348', planches: '12', date: '2026-07-09 11:05', fgC: '#4DD97E' },
+      { n: '03', name: 'JOB-E19CC7EC', status: 'RUNNING', files: '1358', planches: '46', date: '2026-07-09 09:41', fgC: '#FF9A4D' }
+    ];
+    const f = this.state.filter;
+    const jobs = f === 'TOUS' ? all : all.filter(j => j.status === f);
+    const order = ['TOUS', 'DONE', 'RUNNING'];
+    return {
+      jobs,
+      total: String(jobs.length),
+      filterLabel: f,
+      cycleFilter: () => this.setState(s => ({ filter: order[(order.indexOf(s.filter) + 1) % order.length] }))
+    };
+  }
+}
+</script>
+</body>
+</html>

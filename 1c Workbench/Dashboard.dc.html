@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#141517; font-family:'IBM Plex Mono',monospace; overflow:hidden; }
+  a { color:#FF9A4D; text-decoration:none; } a:hover { color:#FFB35C; }
+</style>
+</helmet>
+
+<div style="width:100vw; height:100vh; background:#141517; display:flex; flex-direction:column; overflow:hidden;">
+  <div style="height:36px; background:#1B1D20; border-bottom:1px solid #33363B; display:flex; align-items:center; padding:0 0 0 12px; flex:none;">
+    <div style="width:14px; height:14px; background:#FF7A1A;"></div>
+    <div style="font:600 11px 'IBM Plex Mono'; color:#C8CBD0; margin-left:10px; letter-spacing:1px; flex:1;">JELOTIA::IMPOSER v2.4</div>
+    <div style="display:flex;"><div style="width:46px; text-align:center; color:#8B8F96; font-size:12px;">─</div><div style="width:46px; text-align:center; color:#8B8F96; font-size:12px;">▢</div><div style="width:46px; text-align:center; color:#8B8F96; font-size:12px;">✕</div></div>
+  </div>
+  <div style="height:44px; background:#1B1D20; border-bottom:1px solid #33363B; display:flex; align-items:stretch; flex:none;">
+    <a href="Dashboard.dc.html" style="display:flex; align-items:center; padding:0 22px; background:#26282C; border-right:1px solid #33363B; border-top:2px solid #FF7A1A; font:600 12px 'IBM Plex Mono'; color:#FF9A4D; letter-spacing:1px;">F1·DASHBOARD</a>
+    <a href="Jobs.dc.html" style="display:flex; align-items:center; padding:0 22px; border-right:1px solid #33363B; font:400 12px 'IBM Plex Mono'; color:#8B8F96; letter-spacing:1px;">F2·JOBS</a>
+    <a href="Apercu Planche.dc.html" style="display:flex; align-items:center; padding:0 22px; border-right:1px solid #33363B; font:400 12px 'IBM Plex Mono'; color:#8B8F96; letter-spacing:1px;">F3·PLANCHES</a>
+    <a href="Parametres.dc.html" style="display:flex; align-items:center; padding:0 22px; border-right:1px solid #33363B; font:400 12px 'IBM Plex Mono'; color:#8B8F96; letter-spacing:1px;">F4·CONFIG</a>
+    <div style="margin-left:auto; display:flex; align-items:center; gap:10px; padding:0 20px;">
+      <div style="font:400 11px 'IBM Plex Mono'; color:#8B8F96;">HOT.FOLDER</div>
+      <div style="width:10px; height:10px; border-radius:50%; background: {{ hfLed }}; box-shadow:0 0 8px {{ hfGlow }};"></div>
+      <div onClick="{{ toggleHotFolder }}" style="border:1px solid #FF7A1A; color:#FF9A4D; font:600 12px 'IBM Plex Mono'; padding:7px 16px; letter-spacing:1px; cursor:pointer;">{{ hfBtn }}</div>
+    </div>
+  </div>
+  <div style="flex:1; padding:18px; display:flex; flex-direction:column; gap:14px; min-height:0;">
+    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:14px;">
+      <div style="background:#1B1D20; border:1px solid #33363B; padding:16px 18px;">
+        <div style="display:flex; align-items:center; gap:8px;"><div style="width:8px; height:8px; border-radius:50%; background:#4DD97E; box-shadow:0 0 6px rgba(77,217,126,.8);"></div><div style="font:400 11px 'IBM Plex Mono'; color:#8B8F96; letter-spacing:1.5px;">JOBS.ACTIFS</div></div>
+        <div style="font:600 44px 'IBM Plex Mono'; color:#E8EAED; margin-top:8px;">003</div>
+        <div style="font:400 11px 'IBM Plex Mono'; color:#4DD97E;">▲ 1 EN IMPOSITION</div>
+      </div>
+      <div style="background:#1B1D20; border:1px solid #33363B; padding:16px 18px;">
+        <div style="display:flex; align-items:center; gap:8px;"><div style="width:8px; height:8px; border-radius:50%; background:#4DD97E; box-shadow:0 0 6px rgba(77,217,126,.8);"></div><div style="font:400 11px 'IBM Plex Mono'; color:#8B8F96; letter-spacing:1.5px;">ERR.PREFLIGHT</div></div>
+        <div style="font:600 44px 'IBM Plex Mono'; color:#E8EAED; margin-top:8px;">000</div>
+        <div style="font:400 11px 'IBM Plex Mono'; color:#8B8F96;">CHECK 14:32:08</div>
+      </div>
+      <div style="background:#1B1D20; border:1px solid #33363B; padding:16px 18px;">
+        <div style="display:flex; align-items:center; gap:8px;"><div style="width:8px; height:8px; border-radius:50%; background:#FF7A1A; box-shadow:0 0 6px rgba(255,122,26,.8);"></div><div style="font:400 11px 'IBM Plex Mono'; color:#8B8F96; letter-spacing:1.5px;">PLANCHES.GEN</div></div>
+        <div style="font:600 44px 'IBM Plex Mono'; color:#E8EAED; margin-top:8px;">163</div>
+        <div style="font:400 11px 'IBM Plex Mono'; color:#FF9A4D;">+42 AUJOURD'HUI</div>
+      </div>
+      <div style="background:#1B1D20; border:1px solid #FF7A1A; padding:16px 18px;">
+        <div style="display:flex; align-items:center; gap:8px;"><div style="width:8px; height:8px; border-radius:50%; background:#FF7A1A; box-shadow:0 0 6px rgba(255,122,26,.8);"></div><div style="font:400 11px 'IBM Plex Mono'; color:#8B8F96; letter-spacing:1.5px;">TAUX.REMPLISSAGE</div></div>
+        <div style="font:600 44px 'IBM Plex Mono'; color:#FF9A4D; margin-top:8px;">86.9%</div>
+        <div style="width:100%; height:6px; background:#26282C; margin-top:6px;"><div style="width:86.9%; height:6px; background:#FF7A1A;"></div></div>
+      </div>
+    </div>
+    <div style="flex:1; display:flex; gap:14px; min-height:0;">
+      <div style="flex:1; background:#1B1D20; border:1px solid #33363B; padding:18px 22px; display:flex; flex-direction:column; min-width:0;">
+        <div style="font:600 12px 'IBM Plex Mono'; color:#C8CBD0; letter-spacing:1.5px;">┌ PRODUCTION.7J — PLANCHES/JOUR</div>
+        <div style="flex:1; display:flex; align-items:flex-end; gap:18px; padding:20px 6px 0; min-height:0;">
+          <sc-for list="{{ chart }}" as="b" hint-placeholder-count="7">
+            <div style="flex:1; display:flex; flex-direction:column; justify-content:flex-end; gap:7px; height:100%;">
+              <div style="font:600 12px 'IBM Plex Mono'; color:#FF9A4D; text-align:center;">{{ b.v }}</div>
+              <div style="height: {{ b.h }}; background:repeating-linear-gradient(0deg,#FF7A1A 0 6px,#D96010 6px 8px); min-height:8px;"></div>
+              <div style="font:400 10px 'IBM Plex Mono'; color:#8B8F96; text-align:center;">{{ b.d }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="width:380px; background:#1B1D20; border:1px solid #33363B; padding:18px 22px; display:flex; flex-direction:column; flex:none;">
+        <div style="font:600 12px 'IBM Plex Mono'; color:#C8CBD0; letter-spacing:1.5px;">┌ JOURNAL.SYSTEME</div>
+        <div style="margin-top:14px; display:flex; flex-direction:column; gap:9px; font:400 11px/1.5 'IBM Plex Mono';">
+          <div style="color:#4DD97E;">14:32 [OK ] JOB-37B038D6 → EXPORT PDF</div>
+          <div style="color:#C8CBD0;">14:31 [RUN] IMPOSITION 23 POSES</div>
+          <div style="color:#C8CBD0;">11:05 [BAT] REGROUPEMENT 348 FICHIERS</div>
+          <div style="color:#4DD97E;">09:41 [OK ] PREFLIGHT 1358 PDF · 0 ERR</div>
+          <div style="color:#FF9A4D;">08:00 [SYS] HOT.FOLDER START</div>
+          <div style="color:#8B8F96;">07:59 [SYS] WORKERS=4 MEM=4096MB</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="height:32px; background:#1B1D20; border-top:1px solid #33363B; display:flex; align-items:center; gap:20px; padding:0 18px; font:400 11px 'IBM Plex Mono'; color:#8B8F96; flex:none;">
+    <div style="display:flex; align-items:center; gap:6px;"><div style="width:7px; height:7px; border-radius:50%; background:#4DD97E;"></div>{{ hfStatus }}</div>
+    <div>0 JOB ACTIF</div><div>CPU 12%</div><div>MEM 1.2/4.0 GB</div>
+    <div style="margin-left:auto; color:#FF9A4D;">F1·DASHBOARD — FOGRA39 · 300DPI</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { hotFolder: false };
+  renderVals() {
+    const vals = [12, 18, 14, 25, 22, 30, 42];
+    const days = ['03/07', '04/07', '05/07', '06/07', '07/07', '08/07', '09/07'];
+    const chart = vals.map((v, i) => ({ v: String(v), d: days[i], h: Math.round((v / 42) * 100) + '%' }));
+    const on = this.state.hotFolder;
+    return {
+      chart,
+      hfLed: on ? '#4DD97E' : '#E5484D',
+      hfGlow: on ? 'rgba(77,217,126,.7)' : 'rgba(229,72,77,.7)',
+      hfBtn: on ? '[ ARRÊTER ]' : '[ DÉMARRER ]',
+      hfStatus: on ? 'HOT.FOLDER ACTIF' : 'PRÊT',
+      toggleHotFolder: () => this.setState(s => ({ hotFolder: !s.hotFolder }))
+    };
+  }
+}
+</script>
+</body>
+</html>
