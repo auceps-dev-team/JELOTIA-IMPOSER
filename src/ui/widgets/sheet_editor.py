@@ -19,11 +19,13 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
 from src.core.models.domain import FileItem, JobSettings, PlacedItem, PreflightStatus, Sheet
+from src.core.processors.job_processor import job_assets_dir
 from src.ui.theme import ThemeManager
 
 _T = ThemeManager
@@ -43,19 +45,6 @@ _SUPPORTED_FILES_FILTER = (
     ";;Images (*.tiff *.tif *.png *.jpg *.jpeg)"
     ";;Tous (*.*)"
 )
-
-
-def job_assets_dir(job_id) -> Path:
-    """Permanent (never auto-cleaned) home for files added to a sheet after
-    the job has already finished — unlike the ephemeral per-job folder under
-    config.processing_dir (deleted by finalize_job_sheets once the initial
-    sheet PDF is generated), this must survive indefinitely: manual sheet
-    regeneration re-reads every item's source file from disk each time."""
-    from src.utils.config import config
-
-    path = config.output_dir / str(job_id) / "assets"
-    path.mkdir(parents=True, exist_ok=True)
-    return path
 
 
 def _render_thumbnail(source_path: Path, rotated: bool, max_px: int = 220) -> Optional[QPixmap]:
@@ -273,6 +262,13 @@ class SheetEditorWidget(QWidget):
         self.spin_width = QDoubleSpinBox()
         self.spin_width.setRange(1.0, 5000.0)
         self.spin_width.setSuffix(" mm")
+        # Compact fixed widths: the spin boxes' default hints (sized for
+        # "5000.00 mm") inflate the tool bar's minimum width, which — being the
+        # widest row of the whole window — would force the window itself wider
+        # than small/scaled screens (the editor lives in the preview's stack,
+        # so its minimum becomes the window's minimum while editing).
+        for spin in (self.spin_grid, self.spin_width):
+            spin.setFixedWidth(110)
         self.spin_width.setToolTip(
             "Les PDF conservent leur ratio (mise en page centrée dans la nouvelle taille).\n"
             "Les images matricielles (JPEG/PNG/TIFF) sont étirées à la taille demandée."
@@ -281,7 +277,8 @@ class SheetEditorWidget(QWidget):
         self.spin_height.setRange(1.0, 5000.0)
         self.spin_height.setSuffix(" mm")
         self.spin_height.setToolTip(self.spin_width.toolTip())
-        self.btn_resize = QPushButton("APPLIQUER LA TAILLE")
+        self.spin_height.setFixedWidth(110)
+        self.btn_resize = QPushButton("REDIMENSIONNER")
         self.btn_resize.clicked.connect(self._apply_resize)
 
         for w in (self.spin_width, self.spin_height, self.btn_resize):
@@ -310,6 +307,9 @@ class SheetEditorWidget(QWidget):
             "Glissez les éléments pour les repositionner. Sélectionnez un élément pour le "
             "pivoter ou changer sa taille."
         )
+        # Purely informational: let it shrink (clipping) rather than impose its
+        # full text width as the editor's — and thus the window's — minimum.
+        self.hint_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.btn_cancel = QPushButton("ANNULER")
         self.btn_apply = QPushButton("[APPLIQUER]")
         self.btn_apply.setObjectName("primary")

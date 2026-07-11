@@ -13,6 +13,62 @@ from src.core.models.domain import FileItem, JobSettings, PreflightStatus, Sheet
 logger = logging.getLogger(__name__)
 
 
+def job_assets_dir(job_id: UUID) -> Path:
+    """Permanent (never auto-cleaned) home for the artwork files a job's
+    sheets reference — unlike the ephemeral per-job folder under
+    config.processing_dir (deleted by finalize_job_sheets once the sheet PDF
+    is generated), this must survive indefinitely: manual sheet regeneration
+    re-reads every item's source file from disk each time."""
+    from src.utils.config import config
+
+    path = config.output_dir / str(job_id) / "assets"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _persist_sheet_sources(sheets: List[Sheet], job_temp_dir: Path, job_id: UUID) -> None:
+    """Relocates every artwork file referenced by the sheets' PlacedItems into
+    the job's permanent assets folder and repoints the items there.
+
+    Without this, items keep referencing the corrected temp files under
+    job_temp_dir, which finalize_job_sheets deletes right after export — so
+    any later manual repositioning (which re-stamps the sheet from those
+    files, possibly days after the job finished) would always fail with
+    MissingArtworkError. Files inside job_temp_dir are moved (that dir is
+    about to be deleted anyway); files elsewhere (hot-folder originals that
+    get archived, arbitrary user paths) are copied.
+    """
+    try:
+        assets_dir = job_assets_dir(job_id)
+    except OSError as e:
+        logger.warning(f"Could not create assets dir for job {job_id}: {e}")
+        return
+
+    relocated: Dict[Path, Path] = {}
+    for sheet in sheets:
+        for item in sheet.items:
+            src = Path(item.source_path)
+            dest = relocated.get(src)
+            if dest is None:
+                if not src.exists() or assets_dir in src.parents:
+                    continue
+                dest = assets_dir / src.name
+                counter = 0
+                while dest.exists():
+                    counter += 1
+                    dest = assets_dir / f"{src.stem}_{counter}{src.suffix}"
+                try:
+                    if job_temp_dir in src.parents:
+                        shutil.move(str(src), str(dest))
+                    else:
+                        shutil.copy2(str(src), str(dest))
+                except OSError as e:
+                    logger.warning(f"Could not persist artwork source {src}: {e}")
+                    continue
+                relocated[src] = dest
+            item.source_path = dest
+
+
 def process_job_files(
     job_id: UUID,
     file_paths: List[Path],
@@ -160,6 +216,12 @@ def finalize_job_sheets(
                     sheet.export_path = final_path
         except Exception as e:
             logger.exception(f"Fatal error during layout or export generation: {e}")
+
+    # The sheets' items still reference intermediate files (about to be
+    # deleted with job_temp_dir) — relocate them somewhere durable first so
+    # manual repositioning can re-stamp the sheets later.
+    if sheets:
+        _persist_sheet_sources(sheets, job_temp_dir, job_id)
 
     # Intermediate artifacts (corrected files from every chunk, base sheet
     # PDFs) have been consumed into job_output_dir; safe to discard.

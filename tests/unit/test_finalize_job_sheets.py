@@ -87,3 +87,34 @@ def test_finalize_single_chunk_alone_is_the_known_sparse_case(tmp_path, badge_pd
 
     assert len(sheets) == 1
     assert 40.0 < sheets[0].fill_rate < 50.0
+
+
+def test_finalize_persists_item_sources_for_later_regeneration(tmp_path, badge_pdf, monkeypatch):
+    """Regression test: finalize_job_sheets deletes the per-job temp dir, but
+    the sheets' PlacedItems used to keep referencing the (corrected) files in
+    there — so manually repositioning a sheet after the job finished always
+    failed with MissingArtworkError. Every referenced source must survive in
+    the permanent assets folder, with the items repointed to it."""
+    from src.utils import config as config_module
+    monkeypatch.setattr(config_module.config, "processing_dir", tmp_path / "processing")
+    monkeypatch.setattr(config_module.config, "output_dir", tmp_path / "output")
+
+    job_id = uuid.uuid4()
+    settings = JobSettings(
+        sheet_width_mm=550.0, sheet_height_mm=890.0, gap_mm=3.0, allow_rotation=True
+    )
+
+    items = process_job_files(job_id, [badge_pdf] * 5, settings)
+    sheets = finalize_job_sheets(job_id, items, settings, job_name="Persist Sources Job")
+
+    assets_dir = tmp_path / "output" / str(job_id) / "assets"
+    placed = [it for sheet in sheets for it in sheet.items]
+    assert placed, "the job should have placed items"
+    for it in placed:
+        src = Path(it.source_path)
+        assert src.exists(), f"source artwork must survive the job: {src}"
+        assert assets_dir in src.parents, f"source must live in the assets dir: {src}"
+
+    # The ephemeral temp dir is still cleaned up, and copied originals stay put.
+    assert not (tmp_path / "processing" / str(job_id)).exists()
+    assert badge_pdf.exists()

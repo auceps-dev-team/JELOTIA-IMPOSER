@@ -2,7 +2,7 @@ import sys
 import uuid
 from pathlib import Path
 
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QGuiApplication, QIcon
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -43,7 +43,15 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("JELOTIA IMPOSER")
-        self.resize(1200, 800)
+        # Never open larger than the (logical) screen: on scaled displays
+        # (e.g. 1366x768 or 1920x1080 at 125-150% Windows zoom) a hardcoded
+        # 1200x800 can already overflow the available desktop area.
+        screen = QGuiApplication.primaryScreen()
+        if screen is not None:
+            avail = screen.availableGeometry()
+            self.resize(min(1200, avail.width()), min(800, avail.height()))
+        else:
+            self.resize(1200, 800)
         icon_path = _resolve_app_icon()
         if icon_path:
             self.setWindowIcon(QIcon(str(icon_path)))

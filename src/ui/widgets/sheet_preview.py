@@ -142,6 +142,9 @@ class SheetPreviewWidget(QWidget):
         self.toolbar_layout.setSpacing(8)
 
         self.info_label = QLabel("Aucun aperçu")
+        # Informational only: an explicit minimum lets the toolbar compress it
+        # instead of forcing the whole window wider than small/scaled screens.
+        self.info_label.setMinimumWidth(120)
 
         self.btn_prev = QPushButton("◀ PREC")
         self.sheet_counter_label = QLabel("")
@@ -451,6 +454,11 @@ class SheetPreviewWidget(QWidget):
 
         self.content_stack.addWidget(self.editor_widget)
         self.content_stack.setCurrentWidget(self.editor_widget)
+        # The editor's tool bars are the widest row of the window; keeping the
+        # 300px telemetry panel beside them can push the window's minimum
+        # beyond the screen (Qt then grows the window off-screen and never
+        # shrinks it back). Its values are stale during editing anyway.
+        self.telemetry_panel.hide()
 
     def _teardown_editor(self, revert: bool):
         """Removes the editor widget and returns to the raster preview.
@@ -468,6 +476,7 @@ class SheetPreviewWidget(QWidget):
         self.content_stack.removeWidget(self.editor_widget)
         self.editor_widget.deleteLater()
         self.editor_widget = None
+        self.telemetry_panel.show()
         self._set_edit_checked(False)
 
     def _set_edit_checked(self, value: bool):

@@ -76,7 +76,10 @@ class JobsWidget(QWidget):
         header.setSectionResizeMode(_COL_NUM, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(_COL_NAME, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(_COL_STATUS, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(_COL_ACTIONS, QHeaderView.ResizeMode.ResizeToContents)
+        # ResizeToContents only measures QTableWidgetItems, not cell widgets —
+        # it would size ACTION to its header text, clipping the DÉTAILS button
+        # into unreadable glyph fragments. Sized explicitly in add_job instead.
+        header.setSectionResizeMode(_COL_ACTIONS, QHeaderView.ResizeMode.Fixed)
 
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -140,9 +143,19 @@ class JobsWidget(QWidget):
 
         btn = QPushButton("DÉTAILS →")
         btn.setObjectName("details_btn")
-        btn.setStyleSheet(f"border:none; color:{_T.ACCENT_TEXT}; font-weight:600;")
+        # Compact padding: the app-wide QPushButton padding (7px 14px) makes
+        # the button taller/wider than a table cell, so the text gets clipped.
+        btn.setStyleSheet(
+            f"border:none; color:{_T.ACCENT_TEXT}; font-weight:600; padding:2px 8px;"
+        )
         btn.clicked.connect(lambda: self.view_details_requested.emit(name))
         self.table.setCellWidget(row, _COL_ACTIONS, btn)
+
+        hint = btn.sizeHint()
+        if self.table.columnWidth(_COL_ACTIONS) < hint.width() + 12:
+            self.table.setColumnWidth(_COL_ACTIONS, hint.width() + 12)
+        if self.table.rowHeight(row) < hint.height() + 8:
+            self.table.setRowHeight(row, hint.height() + 8)
 
         self._update_stats()
         return row
