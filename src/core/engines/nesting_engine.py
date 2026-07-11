@@ -150,7 +150,7 @@ class RectpackNestingStrategy(NestingStrategy):
 
 class ShelfNestingStrategy(NestingStrategy):
     """
-    Shelf Best-Fit Decreasing Height packing.
+    Shelf Best-Fit Decreasing Height packing, plus a cross-sheet compaction pass.
 
     Items are sorted tallest-first and packed into horizontal rows ("shelves")
     that span the sheet; every item in a row sits on the same y and the row's
@@ -161,7 +161,23 @@ class ShelfNestingStrategy(NestingStrategy):
     upfront), so it can flip to whichever orientation lets it join an existing
     row, and only falls back to "smallest new row" as a tie-break when no
     existing row fits it in either orientation.
+
+    The greedy pass alone can still strand an item alone in a mostly-empty
+    row: e.g. a single 731mm-wide item claims a full ~312mm-tall row on a
+    3000mm-wide sheet (76% of that row's width sits empty), simply because no
+    *later* (shorter) item happened to both match its height and still fit
+    its remaining width — while a compatible spot existed on a different,
+    already-mostly-full sheet. This mainly shows up with large, size-varied
+    items on large sheets (small/uniform items rarely leave a row this
+    empty). The compaction pass below fixes exactly that: it scans every row
+    across every sheet, and for the sparsest ones tries to relocate their
+    items into any other row (any sheet) that has room, worst rows first.
+    A row that empties out entirely is removed and rows below it shift up;
+    a sheet that ends up with nothing on it is dropped and the rest renumbered.
     """
+
+    _SPARSE_ROW_THRESHOLD = 0.6  # width utilization below which a row is a compaction candidate
+    _MAX_COMPACTION_PASSES = 10  # safety cap, not expected to be hit in practice
 
     @staticmethod
     def _valid_orientations(width_mm: float, height_mm: float, allow_rotation: bool, sheet_w: float, sheet_h: float):
@@ -186,6 +202,26 @@ class ShelfNestingStrategy(NestingStrategy):
         cols = max(1, int((sheet_w + gap) // (w + gap)))
         rows = max(1, int((sheet_h + gap) // (h + gap)))
         return cols * rows
+
+    @staticmethod
+    def _best_fit(used_width: float, row_height: float, orientations, gap: float, sheet_w: float):
+        """Among the given orientations, returns the one that fits a row of
+        `row_height`, at `used_width` so far, with the least wasted height —
+        or None if none fit. Takes used_width/row_height as plain values
+        (rather than a shelf dict) so the compaction pass can probe a
+        *simulated* occupancy without touching the real shelf yet."""
+        base_x = used_width + (gap if used_width > 0 else 0.0)
+        best, best_waste = None, None
+        for w, h, rotated in orientations:
+            if base_x + w <= sheet_w and h <= row_height:
+                waste = row_height - h
+                if best_waste is None or waste < best_waste:
+                    best, best_waste = (w, h, rotated), waste
+        return best
+
+    @classmethod
+    def _best_fit_in_shelf(cls, shelf: dict, orientations, gap: float, sheet_w: float):
+        return cls._best_fit(shelf["used_width"], shelf["height"], orientations, gap, sheet_w)
 
     def pack(self, items: List[FileItem], settings: JobSettings) -> List[Sheet]:
         if not items:
@@ -220,26 +256,29 @@ class ShelfNestingStrategy(NestingStrategy):
         # set by the tallest item that will ever need it.
         rects.sort(key=lambda r: max(o[1] for o in r["orientations"]), reverse=True)
 
-        sheets: List[Sheet] = []
-        shelves: List[dict] = []
+        # sheet_shelves[i] is the list of shelf dicts belonging to sheet i.
+        # Each shelf: {"y", "height", "used_width", "items": List[PlacedItem]}.
+        # Items live on their shelf (not directly on the Sheet) until the very
+        # end, so the compaction pass can freely move them between shelves —
+        # including shelves on a *different* sheet — before Sheets are built.
+        sheet_shelves: List[List[dict]] = []
+        current_shelves: List[dict] = []
         cursor_y = 0.0
 
         def open_sheet():
-            nonlocal shelves, cursor_y
-            sheets.append(
-                Sheet(job_id=job_id, sheet_number=len(sheets) + 1, width_mm=sheet_w, height_mm=sheet_h)
-            )
-            shelves = []
+            nonlocal current_shelves, cursor_y
+            current_shelves = []
+            sheet_shelves.append(current_shelves)
             cursor_y = 0.0
 
-        def open_shelf(height: float):
+        def open_shelf(height: float) -> dict:
             nonlocal cursor_y
-            needed_y = cursor_y + (gap if shelves else 0.0)
+            needed_y = cursor_y + (gap if current_shelves else 0.0)
             if needed_y + height > sheet_h:
                 open_sheet()
                 needed_y = 0.0
-            shelf = {"y": needed_y, "height": height, "used_width": 0.0}
-            shelves.append(shelf)
+            shelf = {"y": needed_y, "height": height, "used_width": 0.0, "items": []}
+            current_shelves.append(shelf)
             cursor_y = needed_y + height
             return shelf
 
@@ -249,50 +288,168 @@ class ShelfNestingStrategy(NestingStrategy):
             # Best-fit across every existing shelf AND every valid orientation:
             # an item can rotate specifically to slot into a row it wouldn't
             # otherwise fit, instead of always claiming a fresh row.
-            best = None  # (shelf, w, h, rotated, waste)
-            for shelf in shelves:
-                base_x = shelf["used_width"] + (gap if shelf["used_width"] > 0 else 0.0)
-                for w, h, rotated in r["orientations"]:
-                    if base_x + w <= sheet_w and h <= shelf["height"]:
-                        waste = shelf["height"] - h
-                        if best is None or waste < best[4]:
-                            best = (shelf, w, h, rotated, waste)
+            best_shelf, best_placement, best_waste = None, None, None
+            for shelf in current_shelves:
+                placement = self._best_fit_in_shelf(shelf, r["orientations"], gap, sheet_w)
+                if placement is not None:
+                    waste = shelf["height"] - placement[1]
+                    if best_waste is None or waste < best_waste:
+                        best_shelf, best_placement, best_waste = shelf, placement, waste
 
-            if best is None:
+            if best_placement is None:
                 # No existing shelf works in any orientation — open a new one,
                 # in whichever orientation packs this shape most densely
                 # against the sheet's actual proportions (see _grid_capacity).
                 w, h, rotated = max(
                     r["orientations"], key=lambda o: self._grid_capacity(o[0], o[1], gap, sheet_w, sheet_h)
                 )
-                shelf = open_shelf(h)
+                best_shelf = open_shelf(h)
             else:
-                shelf, w, h, rotated, _ = best
+                w, h, rotated = best_placement
 
-            x = shelf["used_width"] + (gap if shelf["used_width"] > 0 else 0.0)
-            sheets[-1].items.append(
+            x = best_shelf["used_width"] + (gap if best_shelf["used_width"] > 0 else 0.0)
+            best_shelf["items"].append(
                 PlacedItem(
                     file_item_id=r["item"].id,
                     source_path=r["item"].path,
                     x_mm=x,
-                    y_mm=shelf["y"],
+                    y_mm=best_shelf["y"],
                     width_mm=w,
                     height_mm=h,
                     rotated=rotated,
                 )
             )
-            shelf["used_width"] = x + w
+            best_shelf["used_width"] = x + w
 
-        sheet_area = sheet_w * sheet_h
-        for s in sheets:
-            placed_area = sum(pi.width_mm * pi.height_mm for pi in s.items)
-            s.fill_rate = (placed_area / sheet_area) * 100.0 if sheet_area > 0 else 0.0
+        self._compact(sheet_shelves, settings, gap, sheet_w, sheet_h)
 
-        sheets = [s for s in sheets if s.items]
-        for i, s in enumerate(sheets):
-            s.sheet_number = i + 1
-
+        sheets = self._build_sheets(sheet_shelves, job_id, gap, sheet_w, sheet_h)
         logger.info(f"Shelf nesting completed: {len(sheets)} sheets generated.")
+        return sheets
+
+    def _compact(
+        self, sheet_shelves: List[List[dict]], settings: JobSettings, gap: float, sheet_w: float, sheet_h: float
+    ) -> None:
+        """Drains the sparsest rows (worst first, across every sheet) into
+        whichever other row fits them best, mutating `sheet_shelves` in place.
+        Rows that end up empty are left as empty shells here; _build_sheets
+        drops them (and shifts the rest up) when assembling final Sheets.
+
+        Draining a row is all-or-nothing: a row that only partially empties
+        never gets collapsed, wasting the whole attempt (its sheet can't be
+        dropped either way), so a row is only touched once *every* one of its
+        items has a confirmed new home. Candidate placements are found via a
+        local `sim_width` overlay (row -> hypothetical used_width) rather
+        than mutating the real shelves as we go — otherwise two items from
+        the same drained row could both be matched to the same target row
+        based on its pre-move occupancy, and the second one would land past
+        the sheet's edge once the first one's move is actually applied. The
+        overlay also means later items in the plan correctly see earlier
+        ones' tentative placement in that same target row.
+        """
+        all_shelves = [shelf for shelves in sheet_shelves for shelf in shelves]
+
+        changed = True
+        passes = 0
+        while changed and passes < self._MAX_COMPACTION_PASSES:
+            passes += 1
+            changed = False
+
+            sparse = sorted(
+                (
+                    shelf
+                    for shelf in all_shelves
+                    if shelf["items"] and shelf["used_width"] / sheet_w < self._SPARSE_ROW_THRESHOLD
+                ),
+                key=lambda s: s["used_width"],
+            )
+
+            for shelf in sparse:
+                if not shelf["items"]:
+                    continue
+
+                sim_width = {}  # id(other_shelf) -> hypothetical used_width, this row's plan only
+                plan = []  # (placed_item, other_shelf, x, w, h, rotated)
+                ok = True
+
+                for placed_item in shelf["items"]:
+                    orientations = [(placed_item.width_mm, placed_item.height_mm, placed_item.rotated)]
+                    if settings.allow_rotation and placed_item.width_mm != placed_item.height_mm:
+                        orientations.append(
+                            (placed_item.height_mm, placed_item.width_mm, not placed_item.rotated)
+                        )
+
+                    # Prefer whichever target row ends up fullest after the
+                    # move — makes the most of every relocation.
+                    best_target, best_fill = None, None
+                    for other in all_shelves:
+                        if other is shelf:
+                            continue
+                        used_width = sim_width.get(id(other), other["used_width"])
+                        placement = self._best_fit(used_width, other["height"], orientations, gap, sheet_w)
+                        if placement is None:
+                            continue
+                        w, h, rotated = placement
+                        base_x = used_width + (gap if used_width > 0 else 0.0)
+                        fill = (base_x + w) / sheet_w
+                        if best_fill is None or fill > best_fill:
+                            best_target, best_fill = (other, used_width, w, h, rotated), fill
+
+                    if best_target is None:
+                        ok = False
+                        break
+
+                    other, used_width, w, h, rotated = best_target
+                    x = used_width + (gap if used_width > 0 else 0.0)
+                    sim_width[id(other)] = x + w
+                    plan.append((placed_item, other, x, w, h, rotated))
+
+                if not ok:
+                    continue
+
+                for placed_item, other, x, w, h, rotated in plan:
+                    placed_item.x_mm, placed_item.y_mm = x, other["y"]
+                    placed_item.width_mm, placed_item.height_mm, placed_item.rotated = w, h, rotated
+                    other["items"].append(placed_item)
+                    other["used_width"] = sim_width[id(other)]
+
+                shelf["items"] = []
+                shelf["used_width"] = 0.0
+                changed = True
+
+    @staticmethod
+    def _build_sheets(
+        sheet_shelves: List[List[dict]], job_id, gap: float, sheet_w: float, sheet_h: float
+    ) -> List[Sheet]:
+        """Assembles final Sheets from (possibly compacted) shelves: empty
+        rows are dropped and the rows below shifted up to close the gap (using
+        the standard row gap, since any *original* spacing between two rows
+        that are now neighbors is meaningless once whatever was between them
+        has been removed); sheets left with nothing on them are dropped and
+        the rest renumbered."""
+        sheets: List[Sheet] = []
+        sheet_area = sheet_w * sheet_h
+
+        for shelves in sheet_shelves:
+            shelves = [s for s in shelves if s["items"]]
+            if not shelves:
+                continue
+
+            shelves.sort(key=lambda s: s["y"])
+            sheet = Sheet(job_id=job_id, sheet_number=len(sheets) + 1, width_mm=sheet_w, height_mm=sheet_h)
+            new_y = 0.0
+            for shelf in shelves:
+                shift = shelf["y"] - new_y
+                for placed_item in shelf["items"]:
+                    if shift:
+                        placed_item.y_mm -= shift
+                    sheet.items.append(placed_item)
+                new_y += shelf["height"] + gap
+
+            placed_area = sum(pi.width_mm * pi.height_mm for pi in sheet.items)
+            sheet.fill_rate = (placed_area / sheet_area) * 100.0 if sheet_area > 0 else 0.0
+            sheets.append(sheet)
+
         return sheets
 
 

@@ -12,6 +12,7 @@ from src.core.models.domain import (
     FileFormat,
     FileItem,
     JobSettings,
+    PlacedItem,
     PreflightStatus,
 )
 
@@ -402,6 +403,161 @@ def test_nesting_engine_margin_too_large_yields_no_sheets(caplog):
 
     assert sheets == []
     assert "no usable space" in caplog.text
+
+
+def create_placed_item(x: float, y: float, width: float, height: float, rotated: bool = False) -> PlacedItem:
+    return PlacedItem(
+        file_item_id=uuid.uuid4(),
+        source_path=Path("mock.pdf"),
+        x_mm=x,
+        y_mm=y,
+        width_mm=width,
+        height_mm=height,
+        rotated=rotated,
+    )
+
+
+def test_shelf_compaction_relocates_item_across_sheets():
+    """Regression test for the scenario described in ShelfNestingStrategy's
+    docstring: an item stranded alone in a sparse row (because the forward
+    pass only ever looks at rows on the *current* sheet) gets picked up by
+    the compaction pass and relocated to a row with room on another sheet.
+
+    Item D (15x35) is too wide to join sheet2's own row (used 90/100, only
+    10mm left) so the forward pass strands it in a fresh row of its own.
+    Compaction later finds it a home in sheet1's sparse row (20/100 used
+    before A/B, 80mm left) instead.
+    """
+    settings = JobSettings(sheet_width_mm=100.0, sheet_height_mm=100.0, gap_mm=0.0, allow_rotation=False)
+    items = [
+        create_mock_file(100, 65),  # A: closes most of sheet1
+        create_mock_file(20, 35),  # B: stranded alone in a sparse row on sheet1
+        create_mock_file(90, 35),  # C: too wide for B's row -> opens sheet2
+        create_mock_file(15, 35),  # D: too wide for C's row -> forward pass strands it too
+    ]
+
+    sheets = ShelfNestingStrategy().pack(items, settings)
+
+    assert len(sheets) == 2
+    sheet1, sheet2 = sheets
+
+    # D ended up compacted onto sheet1, next to B, instead of stranded alone on sheet2.
+    assert len(sheet1.items) == 3
+    assert len(sheet2.items) == 1
+    relocated = next(it for it in sheet1.items if it.width_mm == 15.0)
+    assert relocated.y_mm == 65.0
+    assert relocated.x_mm == 20.0  # placed right after B (used_width 20)
+
+    # No overlaps, everything stays in bounds.
+    for sheet in sheets:
+        for it in sheet.items:
+            assert it.x_mm + it.width_mm <= 100.0 + 1e-6
+            assert it.y_mm + it.height_mm <= 100.0 + 1e-6
+
+
+def test_shelf_compaction_disabled_leaves_item_stranded():
+    """Same setup as above, but with the compaction pass disabled: item D
+    stays stranded alone on sheet2 instead of being relocated to sheet1."""
+    settings = JobSettings(sheet_width_mm=100.0, sheet_height_mm=100.0, gap_mm=0.0, allow_rotation=False)
+    items = [
+        create_mock_file(100, 65),
+        create_mock_file(20, 35),
+        create_mock_file(90, 35),
+        create_mock_file(15, 35),
+    ]
+
+    strategy = ShelfNestingStrategy()
+    original_compact = ShelfNestingStrategy._compact
+    ShelfNestingStrategy._compact = lambda self, *args, **kwargs: None
+    try:
+        sheets = strategy.pack(items, settings)
+    finally:
+        ShelfNestingStrategy._compact = original_compact
+
+    assert len(sheets) == 2
+    assert len(sheets[0].items) == 2  # A, B only
+    assert len(sheets[1].items) == 2  # C, D both stranded together on sheet2
+
+
+def test_compact_relocates_item_to_better_fit_using_rotation():
+    """A sparse row's item that doesn't fit a target row in its stored
+    orientation should be rotated to fit if allow_rotation is set."""
+    stranded_item = create_placed_item(0, 0, 100, 30)
+    sparse_row = {"y": 0, "height": 30, "used_width": 100, "items": [stranded_item]}
+    # Tall row with only 50mm of width left: the item's 100x30 orientation
+    # doesn't fit that width, but rotated to 30x100 it does.
+    target_row = {"y": 30, "height": 100, "used_width": 250, "items": []}
+    sheet_shelves = [[sparse_row, target_row]]
+    settings = JobSettings(allow_rotation=True)
+
+    ShelfNestingStrategy()._compact(sheet_shelves, settings, gap=0.0, sheet_w=300.0, sheet_h=200.0)
+
+    assert sparse_row["items"] == []
+    assert sparse_row["used_width"] == 0.0
+    assert len(target_row["items"]) == 1
+    relocated = target_row["items"][0]
+    assert relocated.rotated is True
+    assert relocated.width_mm == 30.0
+    assert relocated.height_mm == 100.0
+    assert relocated.x_mm == 250.0
+    assert relocated.y_mm == 30  # moved to the target row's y
+
+
+def test_compact_is_all_or_nothing_per_row():
+    """If only some of a sparse row's items can be relocated, none of them
+    move — a row that only partially empties can't be dropped anyway, so a
+    partial drain would just waste items' positions for nothing."""
+    item_a = create_placed_item(0, 0, 20, 20)
+    item_b = create_placed_item(20, 0, 20, 20)
+    sparse_row = {"y": 0, "height": 20, "used_width": 40, "items": [item_a, item_b]}
+    # Only 20mm of room left: fits one item, not both.
+    target_row = {"y": 20, "height": 20, "used_width": 80, "items": []}
+    sheet_shelves = [[sparse_row, target_row]]
+    settings = JobSettings(allow_rotation=False)
+
+    ShelfNestingStrategy()._compact(sheet_shelves, settings, gap=0.0, sheet_w=100.0, sheet_h=100.0)
+
+    assert sparse_row["items"] == [item_a, item_b]
+    assert sparse_row["used_width"] == 40
+    assert target_row["items"] == []
+
+
+def test_build_sheets_drops_empty_rows_and_shifts_remaining_rows_up():
+    """Rows emptied by compaction are removed and the rows below shift up
+    to close the gap; sheets left with nothing on them are dropped and the
+    rest renumbered."""
+    item1 = create_placed_item(0, 0, 80, 50)
+    item2 = create_placed_item(0, 100, 50, 30)
+
+    sheet_shelves = [
+        [
+            {"y": 0, "height": 50, "used_width": 80, "items": [item1]},
+            {"y": 55, "height": 40, "used_width": 0.0, "items": []},  # emptied row
+            {"y": 100, "height": 30, "used_width": 50, "items": [item2]},
+        ],
+        [
+            {"y": 0, "height": 20, "used_width": 0.0, "items": []},  # emptied sheet
+        ],
+    ]
+
+    sheets = ShelfNestingStrategy._build_sheets(
+        sheet_shelves, job_id=uuid.uuid4(), gap=5.0, sheet_w=100.0, sheet_h=200.0
+    )
+
+    assert len(sheets) == 1  # the fully-emptied sheet is dropped
+    sheet = sheets[0]
+    assert sheet.sheet_number == 1
+    assert len(sheet.items) == 2
+
+    # item1's row was untouched (still the first row).
+    assert item1.y_mm == 0.0
+    # item2 shifted up: the empty row between it and item1 is closed, so it
+    # now sits right after item1's row using the standard gap (50 + 5 = 55),
+    # not its original y=100.
+    assert item2.y_mm == 55.0
+
+    expected_fill = (80 * 50 + 50 * 30) / (100 * 200) * 100.0
+    assert abs(sheet.fill_rate - expected_fill) < 1e-6
 
 
 def test_nesting_guillotine_algo():
