@@ -73,6 +73,25 @@ def test_no_quantity_override_defaults_to_one(tmp_path, simple_pdf, monkeypatch)
     assert items[0].quantity == 1
 
 
+def test_quantity_key_normalization_bridges_dialog_and_processor(tmp_path, simple_pdf, monkeypatch):
+    """Regression: JobDialog keys the quantities map by the raw path string Qt
+    returns (forward slashes), while process_job_files looks it up by
+    str(Path(file_path)) — OS-native separators (backslashes on Windows). On
+    Windows the two never matched, so every file silently stayed at quantity 1.
+    MainWindow._submit_job bridges them by normalizing keys to str(Path(...));
+    this locks that a forward-slash key, once normalized, is honored."""
+    from src.utils import config as config_module
+    monkeypatch.setattr(config_module.config, "processing_dir", tmp_path / "processing")
+
+    posix_key = simple_pdf.as_posix()  # forward slashes, as the dialog produces
+    normalized = {str(Path(k)): v for k, v in {posix_key: 6}.items()}
+
+    items = process_job_files(uuid.uuid4(), [simple_pdf], JobSettings(), quantities=normalized)
+
+    assert len(items) == 1
+    assert items[0].quantity == 6
+
+
 def test_quantity_map_only_affects_matching_path(tmp_path, simple_pdf, monkeypatch):
     """A quantities dict that doesn't mention this file must not change its
     default quantity of 1 (e.g. only one of several files in a job was

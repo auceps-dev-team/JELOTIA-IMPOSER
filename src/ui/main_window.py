@@ -181,7 +181,13 @@ class MainWindow(QMainWindow):
         if overrides.get("sheet_height_mm"):
             settings.sheet_height_mm = overrides["sheet_height_mm"]
         self._job_settings[job_name] = settings
-        quantities = overrides.get("quantities") or {}
+        # Normalize the per-file quantity keys to str(Path(...)): the dialog
+        # keys them by the raw path string (forward slashes, as Qt returns),
+        # but process_job_files looks them up by str(Path(file_path)) — which
+        # uses OS-native separators (backslashes on Windows). Without this the
+        # keys never matched and every file silently stayed at quantity 1.
+        raw_quantities = overrides.get("quantities") or {}
+        quantities = {str(Path(k)): v for k, v in raw_quantities.items()}
 
         chunk_size = max(1, int(ConfigManager().get("automation", "max_files_per_job") or 50))
         chunks = [paths[i : i + chunk_size] for i in range(0, len(paths), chunk_size)] or [[]]

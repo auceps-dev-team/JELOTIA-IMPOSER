@@ -72,7 +72,11 @@ class JobDialog(QDialog):
         self.files_table.setHorizontalHeaderLabels(["Fichier", "Quantité"])
         header = self.files_table.horizontalHeader()
         header.setSectionResizeMode(_FILE_COL, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(_QTY_COL, QHeaderView.ResizeMode.ResizeToContents)
+        # ResizeToContents only measures QTableWidgetItems, not the cell's
+        # QSpinBox widget — it would size the column to the "Quantité" header
+        # text and clip the spinbox into unreadable fragments. Sized explicitly
+        # in _add_file_row from the spinbox's own sizeHint instead.
+        header.setSectionResizeMode(_QTY_COL, QHeaderView.ResizeMode.Fixed)
         self.files_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.files_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         for f in self.initial_files:
@@ -110,6 +114,14 @@ class JobDialog(QDialog):
         qty_spin.setMaximum(9999)
         qty_spin.setValue(self.quantity_spin.value())
         self.files_table.setCellWidget(row, _QTY_COL, qty_spin)
+
+        # Fixed column / row sized to the spinbox itself (see the Fixed resize
+        # mode above), so the value and its up/down arrows are never clipped.
+        hint = qty_spin.sizeHint()
+        if self.files_table.columnWidth(_QTY_COL) < hint.width() + 12:
+            self.files_table.setColumnWidth(_QTY_COL, hint.width() + 12)
+        if self.files_table.rowHeight(row) < hint.height() + 8:
+            self.files_table.setRowHeight(row, hint.height() + 8)
 
     def add_files(self):
         file_paths, _ = QFileDialog.getOpenFileNames(
