@@ -22,8 +22,36 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.core.models.domain import JobSettings, Sheet
+from src.core.models.domain import (
+    ColorMode,
+    FileFormat,
+    FileItem,
+    JobSettings,
+    PreflightError,
+    PreflightStatus,
+    Sheet,
+)
 from src.database.repository import DatabaseRepository
+
+
+def _file_item_from_model(model) -> FileItem:
+    """Reconstructs a domain FileItem from a persisted FileItemModel row —
+    needed because update_job_files() takes full domain objects (with real
+    enums and PreflightError instances), while get_job() returns raw ORM rows
+    (plain strings/dicts)."""
+    return FileItem(
+        id=model.id,
+        job_id=model.job_id,
+        path=Path(model.path),
+        format=FileFormat(model.format),
+        width_mm=model.width_mm,
+        height_mm=model.height_mm,
+        dpi=model.dpi,
+        color_mode=ColorMode(model.color_mode),
+        quantity=model.quantity,
+        preflight_status=PreflightStatus(model.preflight_status),
+        preflight_errors=[PreflightError(**e) for e in (model.preflight_errors or [])],
+    )
 
 
 class ZoomableView(QGraphicsView):
@@ -318,7 +346,7 @@ class SheetPreviewWidget(QWidget):
 
         from src.ui.widgets.sheet_editor import SheetEditorWidget
 
-        self.editor_widget = SheetEditorWidget(sheet, self)
+        self.editor_widget = SheetEditorWidget(sheet, self.settings, self)
         self.editor_widget.applied.connect(self._apply_edit)
         self.editor_widget.cancelled.connect(lambda: self._teardown_editor(revert=False))
 
@@ -376,6 +404,12 @@ class SheetPreviewWidget(QWidget):
             # so it survives an app restart — regenerating the exported PDF
             # alone previously left the DB with the pre-edit layout.
             self.db.update_job_sheets(str(sheet.job_id), self.sheets)
+
+            new_file_items = self.editor_widget.added_file_items if self.editor_widget else []
+            if new_file_items:
+                job_model = self.db.get_job(str(sheet.job_id))
+                existing = [_file_item_from_model(f) for f in job_model.files] if job_model else []
+                self.db.update_job_files(str(sheet.job_id), existing + new_file_items)
         except Exception as e:
             QMessageBox.warning(self, "Erreur", f"Échec de la régénération de la planche : {e}")
         finally:

@@ -18,6 +18,7 @@ def process_job_files(
     file_paths: List[Path],
     settings: JobSettings,
     quantities: Optional[Dict[str, int]] = None,
+    work_dir: Optional[Path] = None,
 ) -> List[FileItem]:
     """
     Processes a list of file paths for a single job (or a chunk of one — see
@@ -38,6 +39,14 @@ def process_job_files(
             Every FileItem produced from that path (e.g. every page of a
             multi-page PDF) gets the same override. Defaults to 1 (unchanged
             behavior) for paths not present in the map.
+        work_dir (Path, optional): Where CorrectionEngine writes corrected
+            files. Defaults to the usual ephemeral per-job folder under
+            config.processing_dir (cleaned up by finalize_job_sheets once the
+            sheet PDF is generated). Callers that add a file to an *already
+            finished* job (which never runs finalize_job_sheets again) must
+            pass a permanent directory instead, since manual sheet edits
+            re-read each item's corrected file from disk on every
+            regeneration — an ephemeral path would go stale.
 
     Returns:
         List[FileItem]: The fully processed FileItems.
@@ -49,7 +58,7 @@ def process_job_files(
     # root. MainWindow.recover_orphan_jobs() scans that root for crash-recovery
     # and would otherwise pick up our own temp files as brand-new "orphan"
     # jobs, reprocessing them endlessly on every restart.
-    job_temp_dir = config.processing_dir / str(job_id)
+    job_temp_dir = work_dir if work_dir is not None else config.processing_dir / str(job_id)
 
     import_engine = ImportEngine()
     preflight_engine = PreflightEngine()
