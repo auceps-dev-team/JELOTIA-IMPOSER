@@ -26,12 +26,11 @@ class DashboardWidget(QWidget):
         self.cards_layout = QHBoxLayout()
         self.cards_layout.setSpacing(14)
 
-        # Placeholder values, same as before the redesign — wiring these to
-        # real job/sheet counts from the DB is a separate feature, not part
-        # of this visual pass.
-        self.card_active_jobs = StatCard("JOBS.ACTIFS", "000", led_color=_T.STATE_OK)
-        self.card_errors = StatCard("ERR.PREFLIGHT", "000", led_color=_T.STATE_OK)
-        self.card_sheets = StatCard("PLANCHES.GEN", "000", led_color=_T.ACCENT)
+        # Start at zero; refresh_stats() fills these from the DB (called on
+        # startup and after every job event by MainWindow).
+        self.card_active_jobs = StatCard("JOBS.ACTIFS", "0", led_color=_T.STATE_OK)
+        self.card_errors = StatCard("ERR.PREFLIGHT", "0", led_color=_T.STATE_OK)
+        self.card_sheets = StatCard("PLANCHES.GEN", "0", led_color=_T.ACCENT)
         self.card_fill_rate = StatCard(
             "TAUX.REMPLISSAGE", "0.0%", led_color=_T.ACCENT, highlight=True
         )
@@ -77,16 +76,45 @@ class DashboardWidget(QWidget):
         )
         layout.addWidget(title)
 
-        # Mock data — same placeholder values as the previous pyqtgraph-based
-        # chart; pyqtgraph's axis/grid chrome doesn't match the design
-        # system's bare-bars look, so this is a plain hand-built bar row.
-        days = ["03/07", "04/07", "05/07", "06/07", "07/07", "08/07", "09/07"]
-        values = [12, 18, 14, 25, 22, 30, 42]
-        max_val = max(values)
+        # Bare hand-built bar row (pyqtgraph's axis/grid chrome doesn't match
+        # the design system's look). Populated by refresh_stats() from real
+        # per-day sheet counts; starts at zero over the real last-7-days window.
+        self._chart_bars_row = QHBoxLayout()
+        self._chart_bars_row.setSpacing(16)
+        self._chart_bars_row.setContentsMargins(6, 20, 6, 0)
+        layout.addLayout(self._chart_bars_row, 1)
+        self._rebuild_chart({})
+        return panel
 
-        bars_row = QHBoxLayout()
-        bars_row.setSpacing(16)
-        bars_row.setContentsMargins(6, 20, 6, 0)
+    @staticmethod
+    def _clear_layout(layout) -> None:
+        """Recursively removes and deletes every widget/child-layout under
+        `layout` (Qt has no one-shot 'empty this layout' call)."""
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                # Unparent immediately so it stops rendering this frame;
+                # deleteLater alone would leave it drawn at its stale geometry
+                # until the event loop next runs.
+                widget.setParent(None)
+                widget.deleteLater()
+            else:
+                child = item.layout()
+                if child is not None:
+                    DashboardWidget._clear_layout(child)
+                    child.deleteLater()
+
+    def _rebuild_chart(self, sheets_by_date: dict) -> None:
+        """Redraws the 7-day production bars from a {ISO-date: sheet_count} map.
+        Uses UTC dates to match how job created_at is stored (utcnow)."""
+        self._clear_layout(self._chart_bars_row)
+
+        today = datetime.datetime.now(datetime.timezone.utc).date()
+        days = [today - datetime.timedelta(days=i) for i in range(6, -1, -1)]
+        values = [int(sheets_by_date.get(d.isoformat(), 0)) for d in days]
+        max_val = max(values) if values else 0
+
         for day, value in zip(days, values):
             col = QVBoxLayout()
             col.setSpacing(6)
@@ -103,15 +131,32 @@ class DashboardWidget(QWidget):
             bar.set_fill_ratio(value / max_val if max_val else 0)
             col.addWidget(bar, 1)
 
-            day_label = QLabel(day)
+            day_label = QLabel(day.strftime("%d/%m"))
             day_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             day_label.setStyleSheet(f"color:{_T.TEXT_MUTE}; font-size:10px; border:none;")
             col.addWidget(day_label)
 
-            bars_row.addLayout(col)
+            self._chart_bars_row.addLayout(col)
 
-        layout.addLayout(bars_row, 1)
-        return panel
+    def refresh_stats(self, stats: dict) -> None:
+        """Updates every KPI card and the production chart from a stats dict
+        (see DatabaseRepository.get_dashboard_stats). Called on startup and
+        after each job event, so the dashboard always reflects DB truth."""
+        self.card_active_jobs.set_value(str(stats.get("active_jobs", 0)))
+
+        errors = int(stats.get("preflight_errors", 0))
+        self.card_errors.set_value(str(errors))
+        if self.card_errors.led is not None:
+            self.card_errors.led.set_color(_T.STATE_ERR if errors else _T.STATE_OK)
+
+        self.card_sheets.set_value(str(stats.get("total_sheets", 0)))
+
+        fill = float(stats.get("avg_fill_rate", 0.0))
+        self.card_fill_rate.set_value(f"{fill:.1f}%")
+        if self.card_fill_rate.progress is not None:
+            self.card_fill_rate.progress.setValue(round(max(0.0, min(100.0, fill))))
+
+        self._rebuild_chart(stats.get("sheets_by_date", {}))
 
     def _build_journal_panel(self) -> QFrame:
         panel = self._panel()

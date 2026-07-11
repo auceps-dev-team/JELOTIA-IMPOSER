@@ -214,12 +214,11 @@ class MainWindow(QMainWindow):
         group = self._job_group_state.get(job_name)
         self.jobs_view.update_job_status(job_id, "PROCESSING")
 
-        # Only count once per logical job, not once per sub-job chunk.
+        # Only log/persist once per logical job, not once per sub-job chunk.
         if group is None or group["started"] == 0:
             self._log(f"Job {job_name} en cours...")
-            count = int(self.dashboard_view.card_active_jobs.value_label.text())
-            self.dashboard_view.card_active_jobs.value_label.setText(str(count + 1))
             self.db.update_job_status(job_id, "PROCESSING")
+            self._refresh_dashboard()
         if group is not None:
             group["started"] += 1
 
@@ -265,16 +264,12 @@ class MainWindow(QMainWindow):
         job_name = self.jobs_view.job_uuid_map.get(job_id, job_id[:8])
         group = self._job_group_state.get(job_name)
 
-        err_count = int(self.dashboard_view.card_errors.value_label.text())
-        self.dashboard_view.card_errors.value_label.setText(str(err_count + 1))
-
         if group is None:
             self._log(f"Erreur — Job {job_name}")
             self.notifier.notify("Erreur Job", f"{job_name}: {error_msg}", True)
             self.jobs_view.update_job_status(job_id, "ERROR")
             self.db.update_job_status(job_id, "ERROR")
-            count = int(self.dashboard_view.card_active_jobs.value_label.text())
-            self.dashboard_view.card_active_jobs.value_label.setText(str(max(0, count - 1)))
+            self._refresh_dashboard()
             return
 
         group["errored"] = True
@@ -334,7 +329,8 @@ class MainWindow(QMainWindow):
     def _finalize_job(self, job_name: str, job_id: str, sheet_count: int, preflight_map: dict, errored: bool):
         """Marks a logical job (all its sub-job chunks) as finished: updates
         the Jobs row, notifies, shows the aggregated preflight dialog once,
-        and updates dashboard counters exactly once per logical job."""
+        and refreshes the dashboard from the DB (which the caller has already
+        updated with this job's final status/sheets)."""
         status = "ERROR" if errored else "DONE"
         self._log(f"Job {job_name} terminé — {sheet_count} planche(s)")
         self.notifier.notify("Job Terminé", f"{job_name} — {sheet_count} planche(s) générée(s).", errored)
@@ -344,15 +340,14 @@ class MainWindow(QMainWindow):
             from src.ui.widgets.preflight_report import PreflightDialog
             PreflightDialog(self, preflight_map).exec()
 
-        count = int(self.dashboard_view.card_active_jobs.value_label.text())
-        self.dashboard_view.card_active_jobs.value_label.setText(str(max(0, count - 1)))
-        sheets_total = int(self.dashboard_view.card_sheets.value_label.text())
-        self.dashboard_view.card_sheets.value_label.setText(str(sheets_total + sheet_count))
+        self._refresh_dashboard()
 
-        count = int(self.dashboard_view.card_active_jobs.value_label.text())
-        self.dashboard_view.card_active_jobs.value_label.setText(str(max(0, count - 1)))
-        err_count = int(self.dashboard_view.card_errors.value_label.text())
-        self.dashboard_view.card_errors.value_label.setText(str(err_count + 1))
+    def _refresh_dashboard(self) -> None:
+        """Recomputes all dashboard KPIs and the production chart from the DB —
+        the single source of truth — instead of nudging label counters by hand
+        (which drifted: active jobs were decremented twice and errors counted
+        on success). Aggregated in SQL, so it stays cheap at high job counts."""
+        self.dashboard_view.refresh_stats(self.db.get_dashboard_stats())
 
     # ------------------------------------------------------------------ #
     #  Top navigation (F1-F4)                                              #
@@ -567,6 +562,9 @@ class MainWindow(QMainWindow):
                         self._log(f"Planche non restaurée pour {job.name} : {e}")
                 if restored_sheets:
                     self._job_sheets[job.name] = restored_sheets
+
+        # Populate the dashboard KPIs/chart from the restored job history.
+        self._refresh_dashboard()
 
     # ------------------------------------------------------------------ #
     #  Orphan recovery                                                     #

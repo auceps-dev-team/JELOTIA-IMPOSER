@@ -2,7 +2,16 @@ import uuid
 
 import pytest
 
-from src.core.models.domain import ColorMode, FileFormat, FileItem, Job, JobSettings, PlacedItem, Sheet
+from src.core.models.domain import (
+    ColorMode,
+    FileFormat,
+    FileItem,
+    Job,
+    JobSettings,
+    PlacedItem,
+    PreflightStatus,
+    Sheet,
+)
 from src.database.repository import DatabaseRepository
 
 
@@ -160,3 +169,45 @@ def test_get_all_jobs_returns_every_job(repo):
 
     all_jobs = repo.get_all_jobs()
     assert {j.name for j in all_jobs} == {"Job A", "Job B"}
+
+
+def test_get_dashboard_stats_aggregates_from_db(repo):
+    """The dashboard reads live counts from the DB (no more hand-nudged label
+    counters): active = PENDING+PROCESSING jobs, preflight_errors = files in
+    ERROR state, total_sheets and average fill rate over all sheets."""
+    done_id = str(uuid.uuid4())
+    repo.create_job_stub(done_id, "Done Job", ["a.pdf"], JobSettings())
+    repo.update_job_status(done_id, "DONE")
+    repo.update_job_files(
+        done_id,
+        [
+            FileItem(
+                job_id=uuid.UUID(done_id), path="ok.pdf", format=FileFormat.PDF,
+                width_mm=10, height_mm=10, dpi=300, color_mode=ColorMode.CMYK,
+                preflight_status=PreflightStatus.OK,
+            ),
+            FileItem(
+                job_id=uuid.UUID(done_id), path="bad.pdf", format=FileFormat.PDF,
+                width_mm=10, height_mm=10, dpi=300, color_mode=ColorMode.CMYK,
+                preflight_status=PreflightStatus.ERROR,
+            ),
+        ],
+    )
+    repo.update_job_sheets(
+        done_id,
+        [
+            Sheet(job_id=uuid.UUID(done_id), sheet_number=1, fill_rate=60.0),
+            Sheet(job_id=uuid.UUID(done_id), sheet_number=2, fill_rate=80.0),
+        ],
+    )
+
+    proc_id = str(uuid.uuid4())
+    repo.create_job_stub(proc_id, "Proc Job", ["b.pdf"], JobSettings())
+    repo.update_job_status(proc_id, "PROCESSING")
+
+    stats = repo.get_dashboard_stats()
+    assert stats["active_jobs"] == 1  # only the PROCESSING job (Done Job is DONE)
+    assert stats["preflight_errors"] == 1
+    assert stats["total_sheets"] == 2
+    assert stats["avg_fill_rate"] == pytest.approx(70.0)
+    assert sum(stats["sheets_by_date"].values()) == 2

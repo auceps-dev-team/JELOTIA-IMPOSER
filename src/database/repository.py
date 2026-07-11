@@ -1,7 +1,7 @@
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from loguru import logger
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker, subqueryload
 
@@ -136,6 +136,63 @@ class DatabaseRepository:
                 job.sheets
                 session.expunge(job)
             return job
+        finally:
+            session.close()
+
+    def get_dashboard_stats(self) -> Dict[str, object]:
+        """Aggregate metrics for the dashboard, computed in SQL rather than by
+        materializing every job/file/sheet row — the app targets 10k files/day,
+        so a dashboard refresh must not load the whole DB into memory.
+
+        Returns active job count, total preflight-error files, total generated
+        sheets, average sheet fill rate, and a {ISO-date: sheet_count} map
+        (sheets attributed to their parent job's created_at, since sheets carry
+        no timestamp of their own)."""
+        empty: Dict[str, object] = {
+            "active_jobs": 0,
+            "preflight_errors": 0,
+            "total_sheets": 0,
+            "avg_fill_rate": 0.0,
+            "sheets_by_date": {},
+        }
+        session = self.get_session()
+        try:
+            active_jobs = (
+                session.query(func.count(JobModel.id))
+                .filter(JobModel.status.in_(("PENDING", "PROCESSING")))
+                .scalar()
+            ) or 0
+            preflight_errors = (
+                session.query(func.count(FileItemModel.id))
+                .filter(FileItemModel.preflight_status == "ERROR")
+                .scalar()
+            ) or 0
+            total_sheets = session.query(func.count(SheetModel.id)).scalar() or 0
+            avg_fill_rate = session.query(func.avg(SheetModel.fill_rate)).scalar() or 0.0
+
+            # SQLite's date() yields 'YYYY-MM-DD' strings, matching
+            # datetime.date.isoformat() used on the dashboard side.
+            rows = (
+                session.query(
+                    func.date(JobModel.created_at).label("day"),
+                    func.count(SheetModel.id),
+                )
+                .join(SheetModel, SheetModel.job_id == JobModel.id)
+                .group_by("day")
+                .all()
+            )
+            sheets_by_date = {day: int(count) for day, count in rows if day is not None}
+
+            return {
+                "active_jobs": int(active_jobs),
+                "preflight_errors": int(preflight_errors),
+                "total_sheets": int(total_sheets),
+                "avg_fill_rate": float(avg_fill_rate),
+                "sheets_by_date": sheets_by_date,
+            }
+        except SQLAlchemyError as e:
+            logger.error(f"Error computing dashboard stats: {e}")
+            return empty
         finally:
             session.close()
 
