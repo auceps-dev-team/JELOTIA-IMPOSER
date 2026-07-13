@@ -182,6 +182,303 @@ class _ImageStampItem(QGraphicsPixmapItem):
         self._editor.edit_stamp(self.stamp)
 
 
+class _ImageManagerDialog(QDialog):
+    """Images of the current page, listed by xref with a real thumbnail:
+    select one, then replace it with a file (same position, same frame) or
+    blank it. Layout is preserved by construction (xref-level swap)."""
+
+    def __init__(self, editor: "PdfEditorWidget", parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"Images de la page {editor.current_index + 1}")
+        self.resize(560, 460)
+        self.editor = editor
+        self.changed = False
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(10)
+
+        self.list_widget = QListWidget()
+        self.list_widget.setIconSize(QSize(96, 96))
+        layout.addWidget(self.list_widget, 1)
+
+        note = QLabel(
+            "Le remplacement conserve la position et le cadre exacts. Si la même "
+            "image est réutilisée ailleurs dans le document, elle y sera aussi remplacée."
+        )
+        note.setWordWrap(True)
+        note.setStyleSheet(f"color:{_T.TEXT_MUTE}; font-size:11px; border:none;")
+        layout.addWidget(note)
+
+        actions = QHBoxLayout()
+        self.btn_delete = QPushButton("SUPPRIMER L'IMAGE")
+        self.btn_delete.clicked.connect(self._delete)
+        self.btn_replace = QPushButton("[REMPLACER PAR…]")
+        self.btn_replace.setObjectName("primary")
+        self.btn_replace.clicked.connect(self._replace)
+        btn_close = QPushButton("Fermer")
+        btn_close.clicked.connect(self.accept)
+        actions.addWidget(self.btn_delete)
+        actions.addStretch()
+        actions.addWidget(self.btn_replace)
+        actions.addWidget(btn_close)
+        layout.addLayout(actions)
+
+        self._reload()
+
+    def _reload(self):
+        self.list_widget.clear()
+        self.entries = self.editor.session.list_images(self.editor.current_index)
+        for entry in self.entries:
+            rect = entry["rect"]
+            w_mm = (rect.x1 - rect.x0) * _MM_PER_PT
+            h_mm = (rect.y1 - rect.y0) * _MM_PER_PT
+            label = (
+                f"{entry['name']}  ·  {entry['width']}×{entry['height']} px"
+                f"  ·  {w_mm:.0f}×{h_mm:.0f} mm sur la page"
+            )
+            item = QListWidgetItem(label)
+            pix = self.editor.session.image_preview(entry["xref"])
+            if pix is not None:
+                item.setIcon(QIcon(_pixmap_from_fitz(pix)))
+            self.list_widget.addItem(item)
+        has_images = bool(self.entries)
+        self.btn_replace.setEnabled(has_images)
+        self.btn_delete.setEnabled(has_images)
+        if has_images:
+            self.list_widget.setCurrentRow(0)
+
+    def _selected_entry(self) -> Optional[dict]:
+        row = self.list_widget.currentRow()
+        return self.entries[row] if 0 <= row < len(self.entries) else None
+
+    def _replace(self):
+        entry = self._selected_entry()
+        if entry is None:
+            return
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Nouvelle image", "",
+            "Images (*.png *.jpg *.jpeg *.bmp *.tiff *.tif);;Tous (*.*)",
+        )
+        if not path:
+            return
+        try:
+            self.editor.session.replace_image(
+                self.editor.current_index, entry["xref"], Path(path)
+            )
+        except PdfEditError as e:
+            QMessageBox.warning(self, "Erreur", str(e))
+            return
+        self.changed = True
+        self.editor._refresh_all()
+        self._reload()
+
+    def _delete(self):
+        entry = self._selected_entry()
+        if entry is None:
+            return
+        try:
+            self.editor.session.delete_image(self.editor.current_index, entry["xref"])
+        except PdfEditError as e:
+            QMessageBox.warning(self, "Erreur", str(e))
+            return
+        self.changed = True
+        self.editor._refresh_all()
+        self._reload()
+
+
+class _ReplaceTextDialog(QDialog):
+    """Find & replace text on the current page, with a real before/after
+    preview: BEFORE highlights the found occurrences, AFTER renders a clone of
+    the document with the replacement applied — nothing touches the file until
+    [APPLIQUER]. Size/color/bold are pre-filled from the original span."""
+
+    _PREVIEW_W = 430
+
+    def __init__(self, editor: "PdfEditorWidget", parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"Remplacer du texte — page {editor.current_index + 1}")
+        self.resize(940, 640)
+        self.editor = editor
+        self.changed = False
+        self.rects: list = []
+        self.color = "#000000"
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(10)
+
+        form = QFormLayout()
+        form.setSpacing(8)
+        search_row = QHBoxLayout()
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Texte à trouver (ex : 1000 FCFA)")
+        self.btn_search = QPushButton("RECHERCHER")
+        self.btn_search.clicked.connect(self._search)
+        search_row.addWidget(self.search_input, 1)
+        search_row.addWidget(self.btn_search)
+        form.addRow("Rechercher :", search_row)
+
+        self.replace_input = QLineEdit()
+        self.replace_input.setPlaceholderText("Nouveau texte (vide = effacer)")
+        form.addRow("Remplacer par :", self.replace_input)
+
+        style_row = QHBoxLayout()
+        self.spin_size = QDoubleSpinBox()
+        self.spin_size.setRange(4.0, 96.0)
+        self.spin_size.setValue(11.0)
+        self.spin_size.setSuffix(" pt")
+        self.chk_bold = QCheckBox("Gras")
+        self.btn_color = QPushButton(self.color.upper())
+        self.btn_color.clicked.connect(self._pick_color)
+        self.btn_preview = QPushButton("[APERÇU]")
+        self.btn_preview.clicked.connect(self._update_preview)
+        style_row.addWidget(self.spin_size)
+        style_row.addWidget(self.chk_bold)
+        style_row.addWidget(self.btn_color)
+        style_row.addStretch()
+        style_row.addWidget(self.btn_preview)
+        form.addRow("Style :", style_row)
+        layout.addLayout(form)
+
+        self.status = QLabel("Saisissez le texte à trouver puis RECHERCHER.")
+        self.status.setStyleSheet(f"color:{_T.TEXT_MUTE}; font-size:11px; border:none;")
+        layout.addWidget(self.status)
+
+        previews = QHBoxLayout()
+        previews.setSpacing(12)
+        for title, attr in (("AVANT", "before_label"), ("APRÈS", "after_label")):
+            column = QVBoxLayout()
+            head = QLabel(title)
+            head.setStyleSheet(
+                f"color:{_T.ACCENT_TEXT}; font-weight:600; font-size:11px; "
+                f"letter-spacing:1.5px; border:none;"
+            )
+            column.addWidget(head)
+            label = QLabel("—")
+            label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            label.setMinimumSize(self._PREVIEW_W, 380)
+            label.setStyleSheet(f"background-color:#FFFFFF; border:1px solid {_T.BORDER};")
+            setattr(self, attr, label)
+            column.addWidget(label, 1)
+            previews.addLayout(column)
+        layout.addLayout(previews, 1)
+
+        actions = QHBoxLayout()
+        self.btn_apply = QPushButton("[APPLIQUER]")
+        self.btn_apply.setObjectName("primary")
+        self.btn_apply.setEnabled(False)
+        self.btn_apply.clicked.connect(self._apply)
+        btn_close = QPushButton("Fermer")
+        btn_close.clicked.connect(self.reject)
+        actions.addStretch()
+        actions.addWidget(self.btn_apply)
+        actions.addWidget(btn_close)
+        layout.addLayout(actions)
+
+    # ------------------------------------------------------------------ #
+
+    def _pick_color(self):
+        color = QColorDialog.getColor(QColor(self.color), self, "Couleur du texte")
+        if color.isValid():
+            self.color = color.name()
+            self.btn_color.setText(self.color.upper())
+
+    def _search(self):
+        needle = self.search_input.text()
+        session = self.editor.session
+        index = self.editor.current_index
+        self.rects = session.find_text(index, needle)
+        if not self.rects:
+            self.status.setText(
+                "Aucune occurrence trouvée. NB : si le texte du PDF est vectorisé "
+                "(contours dessinés), il n'est pas remplaçable sans OCR."
+            )
+            self.btn_apply.setEnabled(False)
+            self.before_label.setText("—")
+            self.after_label.setText("—")
+            return
+
+        # Pre-fill style from the first occurrence's original span.
+        style = session.text_style_at(index, self.rects[0])
+        self.spin_size.setValue(style["font_size_pt"])
+        self.chk_bold.setChecked(style["bold"])
+        self.color = style["color"]
+        self.btn_color.setText(self.color.upper())
+
+        self.status.setText(
+            f"{len(self.rects)} occurrence(s) — style d'origine détecté : "
+            f"{style['font_size_pt']:g} pt. Ajustez puis APERÇU / APPLIQUER."
+        )
+        self.btn_apply.setEnabled(True)
+        self._render_before()
+        self._update_preview()
+
+    def _render_before(self):
+        session = self.editor.session
+        index = self.editor.current_index
+        pix = session.render_page(index, target_width_px=self._PREVIEW_W * 2)
+        pixmap = _pixmap_from_fitz(pix)
+
+        # Highlight the occurrences on the "before" image.
+        zoom = pixmap.width() / max(1.0, session.doc[index].rect.width)
+        painter = QPainter(pixmap)
+        painter.setBrush(QColor(255, 122, 26, 90))
+        painter.setPen(QColor(_T.ACCENT))
+        for rect in self.rects:
+            painter.drawRect(
+                int(rect.x0 * zoom), int(rect.y0 * zoom),
+                int((rect.x1 - rect.x0) * zoom), int((rect.y1 - rect.y0) * zoom),
+            )
+        painter.end()
+        self._set_preview(self.before_label, pixmap)
+
+    def _update_preview(self):
+        if not self.rects:
+            return
+        session = self.editor.session
+        pix = session.preview_replace_text(
+            self.editor.current_index, self.rects, self.replace_input.text(),
+            font_size_pt=self.spin_size.value(), color=self.color,
+            bold=self.chk_bold.isChecked(), target_width_px=self._PREVIEW_W * 2,
+        )
+        self._set_preview(self.after_label, _pixmap_from_fitz(pix))
+
+    def _set_preview(self, label: QLabel, pixmap: QPixmap):
+        label.setPixmap(
+            pixmap.scaled(
+                label.width(), label.height(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        )
+
+    def _apply(self):
+        if not self.rects:
+            return
+        try:
+            self.editor.session.replace_text(
+                self.editor.current_index, self.rects, self.replace_input.text(),
+                font_size_pt=self.spin_size.value(), color=self.color,
+                bold=self.chk_bold.isChecked(),
+            )
+        except PdfEditError as e:
+            QMessageBox.warning(self, "Erreur", str(e))
+            return
+        self.changed = True
+        self.editor._refresh_all()
+        # Ready for another search on the updated page.
+        self.rects = []
+        self.btn_apply.setEnabled(False)
+        self.status.setText("Remplacement appliqué (annulable via ANNULER). "
+                            "Relancez une recherche pour continuer.")
+        self._render_before_blank()
+
+    def _render_before_blank(self):
+        self.before_label.setText("—")
+        self.after_label.setText("—")
+
+
 class _PageView(QGraphicsView):
     """Preview view; Delete/Backspace removes the selected pending stamps."""
 
@@ -246,14 +543,16 @@ class PdfEditorWidget(QWidget):
         bar.addWidget(self.btn_save)
         root.addWidget(top)
 
-        # --- Page operations row ---------------------------------------- #
+        # --- Operations rows: PAGES then CONTENU -------------------------- #
+        # Two slim rows instead of one crowded one: keeps every button visible
+        # without pushing the window's minimum width past small/scaled screens.
         ops = QFrame()
         ops.setStyleSheet(
             f"QFrame {{ background-color:{_T.BG_PANEL}; border-bottom:1px solid {_T.BORDER}; }}"
         )
-        ops_bar = QHBoxLayout(ops)
-        ops_bar.setContentsMargins(16, 8, 16, 8)
-        ops_bar.setSpacing(8)
+        ops_rows = QVBoxLayout(ops)
+        ops_rows.setContentsMargins(16, 6, 16, 6)
+        ops_rows.setSpacing(4)
 
         self.btn_rot_left = QPushButton("PIVOTER -90°")
         self.btn_rot_right = QPushButton("PIVOTER +90°")
@@ -265,6 +564,8 @@ class PdfEditorWidget(QWidget):
         self.btn_extract = QPushButton("[EXTRAIRE…]")
         self.btn_text = QPushButton("[+ TEXTE]")
         self.btn_image = QPushButton("[+ IMAGE]")
+        self.btn_images = QPushButton("[IMAGES…]")
+        self.btn_replace_text = QPushButton("[REMPLACER TEXTE…]")
 
         self.btn_rot_left.clicked.connect(lambda: self._rotate(-90))
         self.btn_rot_right.clicked.connect(lambda: self._rotate(90))
@@ -276,15 +577,28 @@ class PdfEditorWidget(QWidget):
         self.btn_extract.clicked.connect(self._extract)
         self.btn_text.clicked.connect(self._add_text_stamp)
         self.btn_image.clicked.connect(self._add_image_stamp)
+        self.btn_images.clicked.connect(self._manage_images)
+        self.btn_replace_text.clicked.connect(self._replace_text_dialog)
 
+        pages_row = QHBoxLayout()
+        pages_row.setSpacing(8)
+        pages_row.addWidget(self._ops_label("PAGES"))
         for btn in (
             self.btn_rot_left, self.btn_rot_right, self.btn_add_page,
             self.btn_duplicate, self.btn_delete, self.btn_move_left, self.btn_move_right,
         ):
-            ops_bar.addWidget(btn)
-        ops_bar.addStretch()
-        for btn in (self.btn_extract, self.btn_text, self.btn_image):
-            ops_bar.addWidget(btn)
+            pages_row.addWidget(btn)
+        pages_row.addStretch()
+        pages_row.addWidget(self.btn_extract)
+        ops_rows.addLayout(pages_row)
+
+        content_row = QHBoxLayout()
+        content_row.setSpacing(8)
+        content_row.addWidget(self._ops_label("CONTENU"))
+        for btn in (self.btn_text, self.btn_image, self.btn_images, self.btn_replace_text):
+            content_row.addWidget(btn)
+        content_row.addStretch()
+        ops_rows.addLayout(content_row)
         root.addWidget(ops)
 
         # --- Body: thumbnails + preview ---------------------------------- #
@@ -324,6 +638,14 @@ class PdfEditorWidget(QWidget):
         )
         root.addWidget(self.status_label)
 
+    def _ops_label(self, text: str) -> QLabel:
+        lbl = QLabel(text)
+        lbl.setFixedWidth(70)
+        lbl.setStyleSheet(
+            f"color:{_T.TEXT_DIM}; font-size:10px; letter-spacing:1.5px; border:none;"
+        )
+        return lbl
+
     # ------------------------------------------------------------------ #
     #  Refresh                                                             #
     # ------------------------------------------------------------------ #
@@ -334,7 +656,7 @@ class PdfEditorWidget(QWidget):
             self.btn_merge, self.btn_save, self.btn_rot_left, self.btn_rot_right,
             self.btn_add_page, self.btn_duplicate, self.btn_delete,
             self.btn_move_left, self.btn_move_right, self.btn_extract,
-            self.btn_text, self.btn_image,
+            self.btn_text, self.btn_image, self.btn_images, self.btn_replace_text,
         ):
             btn.setEnabled(open_)
         self.btn_undo.setEnabled(open_ and self.session.can_undo)
@@ -630,3 +952,23 @@ class PdfEditorWidget(QWidget):
             QMessageBox.warning(self, "Erreur", str(e))
             return
         self.status_label.setText(f"{len(indices)} page(s) extraite(s) vers {path}")
+
+    # ------------------------------------------------------------------ #
+    #  Content editing (images by xref, text replacement)                  #
+    # ------------------------------------------------------------------ #
+
+    def _manage_images(self):
+        if not self.session.is_open:
+            return
+        dialog = _ImageManagerDialog(self, self)
+        dialog.exec()
+        if dialog.changed:
+            self._refresh_all()
+
+    def _replace_text_dialog(self):
+        if not self.session.is_open:
+            return
+        dialog = _ReplaceTextDialog(self, self)
+        dialog.exec()
+        if dialog.changed:
+            self._refresh_all()

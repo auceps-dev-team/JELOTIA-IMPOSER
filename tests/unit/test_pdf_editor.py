@@ -173,6 +173,200 @@ def test_page_size_mm_follows_rotation(session):
     assert (w1, h1) == pytest.approx((h0, w0))
 
 
+# --------------------------------------------------------------------------- #
+#  Text search & replace                                                       #
+# --------------------------------------------------------------------------- #
+
+@pytest.fixture
+def price_pdf(tmp_path):
+    path = tmp_path / "price.pdf"
+    doc = fitz.open()
+    page = doc.new_page(width=300, height=200)
+    page.insert_text(fitz.Point(30, 50), "Prix : 1000 FCFA", fontsize=14)
+    page.insert_text(fitz.Point(30, 90), "Livraison gratuite", fontsize=11)
+    doc.save(str(path))
+    doc.close()
+    return path
+
+
+def test_find_text_returns_occurrences(price_pdf):
+    s = PdfEditSession()
+    s.open(price_pdf)
+    rects = s.find_text(0, "1000 FCFA")
+    assert len(rects) == 1
+    assert rects[0].y1 <= 60
+    assert s.find_text(0, "INTROUVABLE") == []
+    assert s.find_text(0, "   ") == []
+    s.close()
+
+
+def test_text_style_detection(price_pdf):
+    s = PdfEditSession()
+    s.open(price_pdf)
+    rect = s.find_text(0, "1000 FCFA")[0]
+    style = s.text_style_at(0, rect)
+    assert style["font_size_pt"] == pytest.approx(14.0, abs=0.5)
+    assert style["color"] == "#000000"
+    s.close()
+
+
+def test_replace_text_swaps_content(price_pdf, tmp_path):
+    s = PdfEditSession()
+    s.open(price_pdf)
+    rects = s.find_text(0, "1000 FCFA")
+    s.replace_text(0, rects, "1500 FCFA", font_size_pt=14.0)
+
+    out = s.save_as(tmp_path / "out.pdf")
+    text = _page_texts(out)[0]
+    assert "1500 FCFA" in text
+    assert "1000 FCFA" not in text
+    assert "Livraison gratuite" in text, "le reste de la page doit être intact"
+
+    assert s.can_undo
+    s.undo()
+    assert "1000 FCFA" in s.doc[0].get_text()
+    s.close()
+
+
+def test_replace_text_with_empty_string_erases(price_pdf, tmp_path):
+    s = PdfEditSession()
+    s.open(price_pdf)
+    rects = s.find_text(0, "Livraison gratuite")
+    s.replace_text(0, rects, "")
+    out = s.save_as(tmp_path / "out.pdf")
+    assert "Livraison" not in _page_texts(out)[0]
+    s.close()
+
+
+def test_preview_does_not_touch_session(price_pdf):
+    s = PdfEditSession()
+    s.open(price_pdf)
+    rects = s.find_text(0, "1000 FCFA")
+
+    pix = s.preview_replace_text(0, rects, "9999 FCFA", font_size_pt=14.0)
+
+    assert pix.width > 0
+    assert "1000 FCFA" in s.doc[0].get_text(), "l'aperçu ne doit pas modifier la session"
+    assert s.modified is False
+    assert not s.can_undo
+    s.close()
+
+
+def test_replace_text_protects_images(tmp_path):
+    """Redaction must not eat an image near/overlapping the text area."""
+    img = tmp_path / "logo.png"
+    Image.new("RGB", (60, 60), "#FF0000").save(str(img))
+    pdf = tmp_path / "doc.pdf"
+    doc = fitz.open()
+    page = doc.new_page(width=200, height=200)
+    page.insert_image(fitz.Rect(50, 20, 110, 80), filename=str(img))
+    page.insert_text(fitz.Point(50, 100), "ANCIEN", fontsize=12)
+    doc.save(str(pdf))
+    doc.close()
+
+    s = PdfEditSession()
+    s.open(pdf)
+    rects = s.find_text(0, "ANCIEN")
+    s.replace_text(0, rects, "NOUVEAU", font_size_pt=12.0)
+    assert len(s.list_images(0)) == 1, "l'image doit survivre à la rédaction"
+    assert "NOUVEAU" in s.doc[0].get_text()
+    s.close()
+
+
+# --------------------------------------------------------------------------- #
+#  Images: list / replace / delete by xref                                     #
+# --------------------------------------------------------------------------- #
+
+def _color_png(tmp_path, name, color):
+    path = tmp_path / name
+    Image.new("RGB", (80, 60), color).save(str(path))
+    return path
+
+
+@pytest.fixture
+def pdf_with_image(tmp_path):
+    """One page with a red image placed at a known rectangle."""
+    red = _color_png(tmp_path, "red.png", "#FF0000")
+    path = tmp_path / "with_image.pdf"
+    doc = fitz.open()
+    page = doc.new_page(width=200, height=300)
+    page.insert_text(fitz.Point(20, 30), "TITRE")
+    page.insert_image(fitz.Rect(50, 100, 150, 175), filename=str(red))
+    doc.save(str(path))
+    doc.close()
+    return path
+
+
+def _center_pixel(session, index, rect):
+    """RGB of the rendered pixel at the center of `rect` (page pt space)."""
+    page_w = session.doc[index].rect.width
+    pix = session.render_page(index, target_width_px=400)
+    zoom = pix.width / page_w
+    x, y = int((rect.x0 + rect.x1) / 2 * zoom), int((rect.y0 + rect.y1) / 2 * zoom)
+    return pix.pixel(x, y)
+
+
+def test_list_images(pdf_with_image):
+    s = PdfEditSession()
+    s.open(pdf_with_image)
+    images = s.list_images(0)
+    assert len(images) == 1
+    entry = images[0]
+    assert entry["xref"] > 0
+    assert entry["rect"].x0 == pytest.approx(50, abs=1)
+    assert entry["rect"].y1 == pytest.approx(175, abs=1)
+    assert (entry["width"], entry["height"]) == (80, 60)
+    assert s.image_preview(entry["xref"]) is not None
+    s.close()
+
+
+def test_replace_image_keeps_frame(pdf_with_image, tmp_path):
+    blue = _color_png(tmp_path, "blue.png", "#0000FF")
+    s = PdfEditSession()
+    s.open(pdf_with_image)
+    entry = s.list_images(0)[0]
+    old_rect = entry["rect"]
+
+    s.replace_image(0, entry["xref"], blue)
+
+    r, g, b = _center_pixel(s, 0, old_rect)
+    assert b > 200 and r < 60, f"le centre doit être bleu, obtenu ({r},{g},{b})"
+    new_entry = s.list_images(0)[0]
+    assert new_entry["rect"] == old_rect, "le cadre doit rester identique"
+
+    out = s.save_as(tmp_path / "out.pdf")
+    assert "TITRE" in _page_texts(out)[0]  # le reste du contenu est intact
+    s.close()
+
+
+def test_replace_image_rejects_bad_file(pdf_with_image, tmp_path):
+    bad = tmp_path / "pas_une_image.png"
+    bad.write_bytes(b"garbage")
+    s = PdfEditSession()
+    s.open(pdf_with_image)
+    entry = s.list_images(0)[0]
+    with pytest.raises(PdfEditError):
+        s.replace_image(0, entry["xref"], bad)
+    assert s.modified is False, "un fichier invalide ne doit rien modifier"
+    s.close()
+
+
+def test_delete_image_blanks_the_spot(pdf_with_image):
+    s = PdfEditSession()
+    s.open(pdf_with_image)
+    entry = s.list_images(0)[0]
+
+    s.delete_image(0, entry["xref"])
+
+    r, g, b = _center_pixel(s, 0, entry["rect"])
+    assert min(r, g, b) > 200, f"l'emplacement doit être blanc, obtenu ({r},{g},{b})"
+    assert s.can_undo
+    s.undo()
+    r, g, b = _center_pixel(s, 0, entry["rect"])
+    assert r > 200 and b < 60, "l'annulation doit restaurer l'image rouge"
+    s.close()
+
+
 def test_undo_restores_previous_state(session):
     session.delete_pages([0])
     assert session.page_count == 2
