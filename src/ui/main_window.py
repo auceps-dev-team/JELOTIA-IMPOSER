@@ -372,7 +372,10 @@ class MainWindow(QMainWindow):
         self.btn_jobs = QPushButton("F2·JOBS")
         self.btn_planches = QPushButton("F3·PLANCHES")
         self.btn_settings = QPushButton("F4·CONFIG")
-        self._nav_buttons = (self.btn_dashboard, self.btn_jobs, self.btn_planches, self.btn_settings)
+        self.btn_qr = QPushButton("F5·QR")
+        self._nav_buttons = (
+            self.btn_dashboard, self.btn_jobs, self.btn_planches, self.btn_settings, self.btn_qr
+        )
 
         for btn in self._nav_buttons:
             btn.setCheckable(True)
@@ -385,6 +388,7 @@ class MainWindow(QMainWindow):
         self.btn_jobs.clicked.connect(lambda: self.switch_view(1, self.btn_jobs))
         self.btn_planches.clicked.connect(lambda: self.switch_view(2, self.btn_planches))
         self.btn_settings.clicked.connect(lambda: self.switch_view(3, self.btn_settings))
+        self.btn_qr.clicked.connect(lambda: self.switch_view(4, self.btn_qr))
 
         self._set_active_nav(self.btn_dashboard)
 
@@ -416,10 +420,16 @@ class MainWindow(QMainWindow):
 
         self.settings_view = SettingsWidget()
 
+        from src.ui.widgets.qr_generator import QRGeneratorWidget
+        self.qr_view = QRGeneratorWidget()
+
+        # Indices must match the switch_view() calls in setup_topnav:
+        # 0 dashboard, 1 jobs, 2 planches, 3 config, 4 QR.
         self.stacked_widget.addWidget(self.dashboard_view)
         self.stacked_widget.addWidget(self.jobs_view)
         self.stacked_widget.addWidget(self.preview_view)
         self.stacked_widget.addWidget(self.settings_view)
+        self.stacked_widget.addWidget(self.qr_view)
 
     def _on_job_created(self, job_name: str, file_paths: list, overrides: dict):
         """Called when a manual job is created in the dialog."""

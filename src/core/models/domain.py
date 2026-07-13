@@ -113,6 +113,40 @@ class Sheet(BaseModel):
     cut_layer_path: Optional[Path] = None
 
 
+class QRErrorCorrection(str, Enum):
+    """QR error-correction level = how much of the code can be damaged (or
+    covered by a logo) while still scanning. L≈7%, M≈15%, Q≈25%, H≈30%."""
+    L = "L"
+    M = "M"
+    Q = "Q"
+    H = "H"
+
+
+class QRCodeSettings(BaseModel):
+    """Visual/encoding parameters for QR generation (JELOTIA QR Generator).
+    Physical size_mm + dpi drive print output; box_size/border drive the raw
+    module raster before it's scaled to the requested physical size."""
+    ecc: QRErrorCorrection = QRErrorCorrection.M
+    box_size: int = 10  # pixels per module in the base raster
+    border: int = 4  # quiet-zone width in modules (4 = spec minimum)
+    fill_color: str = "#000000"
+    back_color: str = "#FFFFFF"
+    size_mm: float = 30.0  # physical side length for print (PDF/PNG)
+    dpi: int = 300
+    logo_path: Optional[Path] = None
+    logo_scale: float = 0.22  # logo side as a fraction of the QR side
+
+
+class QRItem(BaseModel):
+    """One row of a batch = one QR code to produce. `data` is the encoded
+    URL/text; `filename` is the output base name (from a configurable import
+    column); `quantity` is how many copies to place when imposed on a sheet."""
+    id: UUID = Field(default_factory=uuid4)
+    data: str
+    filename: str = ""
+    quantity: int = 1
+
+
 class JobStats(BaseModel):
     total_files: int = 0
     total_quantity: int = 0
