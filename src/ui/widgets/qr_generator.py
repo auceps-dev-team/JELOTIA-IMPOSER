@@ -119,6 +119,16 @@ class QRGeneratorWidget(QWidget):
         self.logo_label.setStyleSheet(f"color:{_T.TEXT_MUTE}; font-size:11px; border:none;")
         outer.addWidget(self.logo_label)
 
+        # --- Lot ------------------------------------------------------ #
+        outer.addWidget(self._section_title("LOT"))
+        self.btn_batch = QPushButton("[GÉNÉRATION PAR LOT…]")
+        self.btn_batch.clicked.connect(self._open_batch_dialog)
+        outer.addWidget(self.btn_batch)
+        hint = QLabel("Import Excel/CSV — un QR par ligne, avec le style ci-dessus.")
+        hint.setWordWrap(True)
+        hint.setStyleSheet(f"color:{_T.TEXT_MUTE}; font-size:11px; border:none;")
+        outer.addWidget(hint)
+
         outer.addStretch()
         return panel
 
@@ -306,6 +316,17 @@ class QRGeneratorWidget(QWidget):
         self.logo_label.setText("Aucun logo")
         self.btn_logo_clear.setEnabled(False)
         self._update_preview()
+
+    # ------------------------------------------------------------------ #
+    #  Batch                                                               #
+    # ------------------------------------------------------------------ #
+
+    def _open_batch_dialog(self):
+        from src.ui.widgets.qr_batch_dialog import QRBatchDialog
+
+        # The batch reuses the exact style currently configured here (colors,
+        # ECC, size, logo, ...), so both single and bulk output look identical.
+        QRBatchDialog(self._current_settings(), self).exec()
 
     # ------------------------------------------------------------------ #
     #  Export                                                              #
