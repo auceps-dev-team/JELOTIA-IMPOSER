@@ -422,6 +422,7 @@ class MainWindow(QMainWindow):
 
         from src.ui.widgets.qr_generator import QRGeneratorWidget
         self.qr_view = QRGeneratorWidget()
+        self.qr_view.imposition_job_requested.connect(self._handle_qr_imposition_job)
 
         # Indices must match the switch_view() calls in setup_topnav:
         # 0 dashboard, 1 jobs, 2 planches, 3 config, 4 QR.
@@ -437,6 +438,15 @@ class MainWindow(QMainWindow):
             self._submit_job(job_name, file_paths, overrides=overrides)
         else:
             self._log(f"Job {job_name} créé (aucun fichier — en attente)")
+
+    def _handle_qr_imposition_job(self, job_name: str, file_paths: list, overrides: dict):
+        """A finished QR batch handed over for imposition: same flow as a hot
+        folder job (row + submit), then jump to F2·JOBS so the operator sees
+        the job running immediately."""
+        self.jobs_view.add_job(job_name, len(file_paths), "PENDING")
+        self._log(f"Lot QR: {job_name} ({len(file_paths)} fichier(s)) → imposition")
+        self._submit_job(job_name, file_paths, overrides=overrides)
+        self.switch_view(1, self.btn_jobs)
 
     def show_preview(self, job_name: str):
         self.stacked_widget.setCurrentWidget(self.preview_view)

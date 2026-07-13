@@ -180,6 +180,77 @@ def test_generate_batch_can_be_cancelled(tmp_path):
     assert result.succeeded == 1
 
 
+def test_imposition_payload_prefers_pdf_and_carries_quantities(tmp_path):
+    from src.core.engines.qr_batch import imposition_payload
+
+    rows = [
+        {"Lien": "https://jelotia.com/a", "Nom": "carte_a", "Qte": "3"},
+        {"Lien": "https://jelotia.com/b", "Nom": "carte_b", "Qte": "1"},
+    ]
+    plan = build_plan(
+        rows, ColumnMapping(url_col="Lien", filename_col="Nom", quantity_col="Qte")
+    )
+    result = generate_batch(
+        QREngine(), plan.items, QRCodeSettings(), tmp_path / "out", ["PNG", "PDF"]
+    )
+
+    paths, quantities = imposition_payload(result)
+    assert len(paths) == 2
+    assert all(p.endswith(".pdf") for p in paths)  # vector output preferred
+    assert quantities[paths[0]] == 3
+    assert quantities[paths[1]] == 1
+
+
+def test_batch_cards_flow_into_imposition_pipeline(tmp_path, monkeypatch):
+    """Full-circle §14: Excel rows → composed cards (template + variable
+    data) → the existing imposition pipeline places every copy on sheets."""
+    from src.core.engines.qr_batch import imposition_payload
+    from src.core.models.domain import CardTemplate, TemplateQRZone, TemplateTextZone
+    from src.core.processors.job_processor import finalize_job_sheets, process_job_files
+    from src.utils import config as config_module
+
+    monkeypatch.setattr(config_module.config, "processing_dir", tmp_path / "processing")
+    monkeypatch.setattr(config_module.config, "output_dir", tmp_path / "output")
+
+    template = CardTemplate(
+        name="Carte", width_mm=85.0, height_mm=55.0,
+        qr_zone=TemplateQRZone(x_mm=58.0, y_mm=20.0, size_mm=24.0),
+        texts=[TemplateTextZone(text="{Nom}", x_mm=5.0, y_mm=22.0)],
+    )
+    rows = [
+        {"Lien": "https://jelotia.com/a", "Nom": "Dupont", "Qte": "2"},
+        {"Lien": "https://jelotia.com/b", "Nom": "Martin", "Qte": "3"},
+    ]
+    plan = build_plan(
+        rows, ColumnMapping(url_col="Lien", filename_col="Nom", quantity_col="Qte")
+    )
+    batch = generate_batch(
+        QREngine(), plan.items, QRCodeSettings(), tmp_path / "cartes", ["PDF"],
+        template=template,
+    )
+    assert batch.succeeded == 2
+
+    import uuid as uuid_mod
+    from pathlib import Path
+
+    from src.core.models.domain import JobSettings
+
+    paths, quantities = imposition_payload(batch)
+    job_id = uuid_mod.uuid4()
+    settings = JobSettings(
+        sheet_width_mm=550.0, sheet_height_mm=890.0, gap_mm=3.0, allow_rotation=True
+    )
+    items = process_job_files(
+        job_id, [Path(p) for p in paths], settings, quantities=quantities
+    )
+    sheets = finalize_job_sheets(job_id, items, settings, job_name="QR-LOT")
+
+    total_placed = sum(len(s.items) for s in sheets)
+    assert total_placed == 5, "2 + 3 copies of the cards must land on the sheets"
+    for s in sheets:
+        assert s.export_path is not None and s.export_path.exists()
+
+
 def test_zip_outputs(tmp_path):
     out = tmp_path / "out"
     plan = build_plan(

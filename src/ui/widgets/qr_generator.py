@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QImage, QPixmap
 from PySide6.QtWidgets import (
     QColorDialog,
@@ -28,8 +28,12 @@ _PREVIEW_PX = 360
 
 
 class QRGeneratorWidget(QWidget):
-    """F5·QR — single QR generation with a live preview and PNG/SVG/PDF export.
-    Batch/Excel import and the imposition hand-off are separate increments."""
+    """F5·QR — single QR generation with a live preview and PNG/SVG/PDF export,
+    plus entry points to the template work area and batch generation. A batch
+    can be handed to the imposition pipeline via imposition_job_requested
+    (job_name, file_paths, overrides) — MainWindow connects it to a job."""
+
+    imposition_job_requested = Signal(str, list, dict)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -339,7 +343,9 @@ class QRGeneratorWidget(QWidget):
 
         # The batch reuses the exact style currently configured here (colors,
         # ECC, size, logo, ...), so both single and bulk output look identical.
-        QRBatchDialog(self._current_settings(), self).exec()
+        dialog = QRBatchDialog(self._current_settings(), self)
+        dialog.imposition_requested.connect(self.imposition_job_requested)
+        dialog.exec()
 
     def _open_designer(self):
         from src.ui.widgets.qr_template_designer import TemplateDesignerDialog

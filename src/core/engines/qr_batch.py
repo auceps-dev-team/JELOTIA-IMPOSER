@@ -175,6 +175,24 @@ def generate_batch(
     return result
 
 
+def imposition_payload(result: BatchResult) -> tuple:
+    """Turns a finished batch into what the imposition pipeline needs:
+    (file_paths, {path: quantity}). Prefers each item's PDF output (vector —
+    what the sheets are stamped from); quantities come from the imported
+    quantity column so 'Qte=50' really places 50 copies on the sheets."""
+    paths: List[str] = []
+    quantities: Dict[str, int] = {}
+    for r in result.results:
+        if not r.ok:
+            continue
+        path = r.paths.get("PDF") or next(iter(r.paths.values()), None)
+        if path is None:
+            continue
+        paths.append(str(path))
+        quantities[str(path)] = max(1, r.item.quantity)
+    return paths, quantities
+
+
 def zip_outputs(src_dir: Path, zip_path: Path) -> Path:
     """Zips every generated file directly under src_dir into zip_path."""
     src_dir = Path(src_dir)

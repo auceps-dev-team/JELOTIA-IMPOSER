@@ -21,6 +21,7 @@ from src.core.engines.qr_batch import (
     ColumnMapping,
     build_plan,
     generate_batch,
+    imposition_payload,
     zip_outputs,
 )
 from src.core.engines.qr_engine import QREngine
@@ -64,7 +65,11 @@ class _BatchWorker(QThread):
 
 class QRBatchDialog(QDialog):
     """Import Excel/CSV → map columns → generate one QR per row (in the style
-    configured in the F5·QR module), with a background run and ZIP export."""
+    configured in the F5·QR module), with a background run and ZIP export.
+    A finished batch can be handed straight to the imposition pipeline via
+    `imposition_requested` (job name, file paths, overrides)."""
+
+    imposition_requested = Signal(str, list, dict)
 
     def __init__(self, settings: QRCodeSettings, parent=None):
         super().__init__(parent)
@@ -75,6 +80,7 @@ class QRBatchDialog(QDialog):
 
         self.headers: List[str] = []
         self.rows: list[dict] = []
+        self._import_stem = "LOT"
         self.out_dir: Optional[Path] = self._default_out_dir()
         self.worker: Optional[_BatchWorker] = None
         self.result: Optional[BatchResult] = None
@@ -168,12 +174,20 @@ class QRBatchDialog(QDialog):
         self.btn_zip = QPushButton("Exporter en ZIP")
         self.btn_zip.setEnabled(False)
         self.btn_zip.clicked.connect(self._export_zip)
+        self.btn_impose = QPushButton("[IMPOSER LE LOT →]")
+        self.btn_impose.setEnabled(False)
+        self.btn_impose.setToolTip(
+            "Crée un job d'imposition à partir des fichiers générés : "
+            "nesting sur planche puis export RIP, quantités du fichier importé respectées."
+        )
+        self.btn_impose.clicked.connect(self._request_imposition)
         self.btn_generate = QPushButton("[GÉNÉRER LE LOT]")
         self.btn_generate.setObjectName("primary")
         self.btn_generate.clicked.connect(self._start_or_cancel)
         self.btn_close = QPushButton("Fermer")
         self.btn_close.clicked.connect(self.reject)
         actions.addWidget(self.btn_zip)
+        actions.addWidget(self.btn_impose)
         actions.addStretch()
         actions.addWidget(self.btn_generate)
         actions.addWidget(self.btn_close)
@@ -250,6 +264,7 @@ class QRBatchDialog(QDialog):
             QMessageBox.warning(self, "Fichier vide", "Aucune colonne détectée.")
             return
 
+        self._import_stem = Path(path).stem
         self.file_label.setText(f"{Path(path).name} — {len(self.rows)} ligne(s)")
         self._populate_mapping()
         self._update_summary()
@@ -368,6 +383,7 @@ class QRBatchDialog(QDialog):
         self._set_running(False)
         self.btn_generate.setEnabled(True)
         self.btn_zip.setEnabled(result.succeeded > 0)
+        self.btn_impose.setEnabled(result.succeeded > 0)
 
         parts = [f"{result.succeeded} généré(s)"]
         if result.failed:
@@ -387,6 +403,21 @@ class QRBatchDialog(QDialog):
         if not running:
             # Re-apply the template rule (formats stay locked with a template).
             self._on_template_changed()
+
+    def _request_imposition(self):
+        """Hands the generated files to the imposition pipeline: one job whose
+        per-file quantities come from the imported quantity column, so the
+        sheets carry exactly the ordered number of each card."""
+        if not self.result or self.result.succeeded == 0:
+            return
+        paths, quantities = imposition_payload(self.result)
+        if not paths:
+            return
+        import datetime
+
+        job_name = f"QR-{self._import_stem}-{datetime.datetime.now():%H%M%S}"
+        self.imposition_requested.emit(job_name, paths, {"quantities": quantities})
+        self.accept()
 
     def _export_zip(self):
         if not self.result or self.result.succeeded == 0:
