@@ -112,7 +112,10 @@ class PdfEditSession:
         for index in indices:
             self._check_index(index)
         if len(indices) >= self.page_count:
-            raise PdfEditError("Impossible de supprimer toutes les pages.")
+            raise PdfEditError(
+                "Un PDF doit conserver au moins une page — ajoutez ou dupliquez "
+                "une page avant de supprimer celle-ci."
+            )
         self._snapshot()
         for index in indices:
             doc.delete_page(index)
@@ -142,7 +145,23 @@ class PdfEditSession:
         doc = self._require_doc()
         self._check_index(index)
         self._snapshot()
-        doc.fullcopy_page(index, index + 1)
+        # fitz semantics (probed): fullcopy_page's `to` must be an EXISTING
+        # page number — index+1 raises on the last page (so duplication of a
+        # single-page document always failed). -1 appends at the end.
+        to = index + 1 if index + 1 < self.page_count else -1
+        doc.fullcopy_page(index, to)
+        self.modified = True
+
+    def insert_blank_page(self, after_index: int) -> None:
+        """Inserts a blank page right after `after_index`, matching that
+        page's displayed size (rotation taken into account)."""
+        doc = self._require_doc()
+        self._check_index(after_index)
+        self._snapshot()
+        w_mm, h_mm = self.page_size_mm(after_index)
+        doc.new_page(
+            pno=after_index + 1, width=w_mm * _MM_TO_PT, height=h_mm * _MM_TO_PT
+        )
         self.modified = True
 
     def merge_pdf(self, path: Path, at: Optional[int] = None) -> int:
@@ -208,10 +227,16 @@ class PdfEditSession:
         self._snapshot()
         page = doc[index]
         rgb = _hex_to_rgb01(color)
+        # Coordinates arrive in DISPLAYED space (what the preview shows);
+        # insert_text expects the unrotated page space — derotate, and pass
+        # rotate= so the glyphs stay upright on a rotated page.
         baseline = fitz.Point(x_mm * _MM_TO_PT, y_mm * _MM_TO_PT + font_size_pt * 0.8)
+        if page.rotation:
+            baseline = baseline * page.derotation_matrix
         page.insert_text(
             baseline, text, fontsize=font_size_pt,
             fontname="hebo" if bold else "helv", color=rgb,
+            rotate=page.rotation,
         )
         self.modified = True
 
@@ -229,13 +254,17 @@ class PdfEditSession:
             raise PdfEditError(f"Image vide : {image_path.name}")
         height_mm = width_mm * pix.height / pix.width
         self._snapshot()
+        page = doc[index]
         rect = fitz.Rect(
             x_mm * _MM_TO_PT,
             y_mm * _MM_TO_PT,
             (x_mm + width_mm) * _MM_TO_PT,
             (y_mm + height_mm) * _MM_TO_PT,
         )
-        doc[index].insert_image(rect, filename=str(image_path))
+        if page.rotation:
+            # Displayed space -> unrotated page space (see add_text).
+            rect = (rect * page.derotation_matrix).normalize()
+        page.insert_image(rect, filename=str(image_path), rotate=page.rotation)
         self.modified = True
 
     # ------------------------------------------------------------------ #
@@ -243,6 +272,10 @@ class PdfEditSession:
     # ------------------------------------------------------------------ #
 
     def page_size_mm(self, index: int) -> tuple:
+        """Displayed size (what the preview renders). fitz's page.rect already
+        reflects the rotation (probed: 200x300 rotated 90° reports 300x200),
+        so no swap is needed here — but insert_text/insert_image work in the
+        UNROTATED space, hence the derotation in add_text/add_image."""
         doc = self._require_doc()
         self._check_index(index)
         rect = doc[index].rect

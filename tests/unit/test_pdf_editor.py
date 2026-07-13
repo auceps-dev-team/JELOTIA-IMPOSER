@@ -124,6 +124,55 @@ def test_add_image(session, tmp_path):
     doc.close()
 
 
+def test_duplicate_single_page_document(tmp_path):
+    """Regression (field report): duplicating always failed on a one-page
+    file — fullcopy_page's `to` must be an existing page or -1."""
+    pdf = _make_pdf(tmp_path / "one.pdf", ["SEULE"])
+    s = PdfEditSession()
+    s.open(pdf)
+    s.duplicate_page(0)
+    assert s.page_count == 2
+    out = s.save_as(tmp_path / "out.pdf")
+    assert _page_texts(out) == ["SEULE", "SEULE"]
+    s.close()
+
+
+def test_duplicate_last_page(session, tmp_path):
+    session.duplicate_page(2)
+    out = session.save_as(tmp_path / "out.pdf")
+    assert _page_texts(out) == ["PAGE A", "PAGE B", "PAGE C", "PAGE C"]
+
+
+def test_insert_blank_page(session, tmp_path):
+    session.insert_blank_page(0)
+    assert session.page_count == 4
+    out = session.save_as(tmp_path / "out.pdf")
+    assert _page_texts(out) == ["PAGE A", "", "PAGE B", "PAGE C"]
+
+    doc = fitz.open(str(out))
+    assert doc[1].rect.width == pytest.approx(200, abs=0.5)
+    assert doc[1].rect.height == pytest.approx(300, abs=0.5)
+    doc.close()
+
+
+def test_add_text_on_rotated_page(session, tmp_path):
+    """Stamps use displayed coordinates; on a rotated page they must be
+    derotated so the text lands where the operator clicked."""
+    session.rotate_page(0, 90)
+    session.add_text(0, x_mm=10, y_mm=10, text="TAMPON PIVOTÉ")
+    out = session.save_as(tmp_path / "out.pdf")
+    assert "TAMPON PIVOTÉ" in _page_texts(out)[0]
+
+
+def test_page_size_mm_follows_rotation(session):
+    """page.rect in fitz already reflects rotation — the displayed size must
+    swap after a 90° turn (this drives the preview's mm mapping)."""
+    w0, h0 = session.page_size_mm(0)
+    session.rotate_page(0, 90)
+    w1, h1 = session.page_size_mm(0)
+    assert (w1, h1) == pytest.approx((h0, w0))
+
+
 def test_undo_restores_previous_state(session):
     session.delete_pages([0])
     assert session.page_count == 2
