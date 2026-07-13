@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
 from src.core.engines.qr_engine import QREngine, safe_filename
-from src.core.models.domain import QRCodeSettings, QRItem
+from src.core.models.domain import CardTemplate, QRCodeSettings, QRItem
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +95,9 @@ def build_plan(
                 except ValueError:
                     quantity = 1
 
-        items.append(QRItem(data=data, filename=filename, quantity=quantity))
+        # The whole row travels with the item so template text zones can
+        # substitute {Colonne} placeholders per row (variable-data printing).
+        items.append(QRItem(data=data, filename=filename, quantity=quantity, row=dict(row)))
 
     return BatchPlan(items=items, duplicates_skipped=duplicates, empty_skipped=empty)
 
@@ -122,15 +124,25 @@ def generate_batch(
     formats: List[str],
     progress_cb: Optional[Callable[[int, int], None]] = None,
     should_cancel: Optional[Callable[[], bool]] = None,
+    template: Optional[CardTemplate] = None,
 ) -> BatchResult:
     """Generates every item in every requested format into out_dir, collecting
     per-item success/failure (one bad row never aborts the whole batch).
 
-    `progress_cb(done, total)` is called after each item; `should_cancel()` is
-    polled before each item so a UI can stop a long run. Output base names are
-    de-duplicated to avoid silent overwrites."""
+    With a `template`, each item is composed onto the card template instead
+    (background PDF + QR at its zone + text zones with per-row {Colonne}
+    substitution) — output is then one vector PDF per row, whatever `formats`
+    says. `progress_cb(done, total)` is called after each item;
+    `should_cancel()` is polled before each item so a UI can stop a long run.
+    Output base names are de-duplicated to avoid silent overwrites."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    composer = None
+    if template is not None:
+        from src.core.engines.template_composer import TemplateComposer
+
+        composer = TemplateComposer()
 
     result = BatchResult(out_dir=out_dir)
     used_names: set[str] = set()
@@ -144,7 +156,14 @@ def generate_batch(
         base = _unique_base(safe_filename(item.filename) or f"qr_{done:05d}", used_names)
         item_named = item.model_copy(update={"filename": base})
         try:
-            paths = engine.generate_item(item_named, settings, out_dir, formats)
+            if composer is not None:
+                path = composer.compose(
+                    template, item_named.data, settings,
+                    out_dir / f"{base}.pdf", row=item_named.row,
+                )
+                paths = {"PDF": path}
+            else:
+                paths = engine.generate_item(item_named, settings, out_dir, formats)
             result.results.append(BatchItemResult(item=item_named, paths=paths))
         except Exception as e:
             logger.warning(f"QR batch: échec pour {base}: {e}")

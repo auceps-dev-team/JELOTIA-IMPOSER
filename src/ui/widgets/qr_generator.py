@@ -119,6 +119,19 @@ class QRGeneratorWidget(QWidget):
         self.logo_label.setStyleSheet(f"color:{_T.TEXT_MUTE}; font-size:11px; border:none;")
         outer.addWidget(self.logo_label)
 
+        # --- Modèles ---------------------------------------------------- #
+        outer.addWidget(self._section_title("MODÈLES"))
+        self.btn_designer = QPushButton("[ZONE DE TRAVAIL — MODÈLES…]")
+        self.btn_designer.clicked.connect(self._open_designer)
+        outer.addWidget(self.btn_designer)
+        designer_hint = QLabel(
+            "Cartes QR, cartes de visite, vignettes, affiches A4–A7 — "
+            "fond PDF + placement du QR et des textes."
+        )
+        designer_hint.setWordWrap(True)
+        designer_hint.setStyleSheet(f"color:{_T.TEXT_MUTE}; font-size:11px; border:none;")
+        outer.addWidget(designer_hint)
+
         # --- Lot ------------------------------------------------------ #
         outer.addWidget(self._section_title("LOT"))
         self.btn_batch = QPushButton("[GÉNÉRATION PAR LOT…]")
@@ -327,6 +340,12 @@ class QRGeneratorWidget(QWidget):
         # The batch reuses the exact style currently configured here (colors,
         # ECC, size, logo, ...), so both single and bulk output look identical.
         QRBatchDialog(self._current_settings(), self).exec()
+
+    def _open_designer(self):
+        from src.ui.widgets.qr_template_designer import TemplateDesignerDialog
+
+        sample = self.url_input.text().strip() or "https://jelotia.com/exemple"
+        TemplateDesignerDialog(self._current_settings(), sample_data=sample, parent=self).exec()
 
     # ------------------------------------------------------------------ #
     #  Export                                                              #

@@ -39,13 +39,14 @@ class _BatchWorker(QThread):
     progress = Signal(int, int)
     done = Signal(object)  # BatchResult
 
-    def __init__(self, engine, items, settings, out_dir, formats, parent=None):
+    def __init__(self, engine, items, settings, out_dir, formats, template=None, parent=None):
         super().__init__(parent)
         self._engine = engine
         self._items = items
         self._settings = settings
         self._out_dir = out_dir
         self._formats = formats
+        self._template = template
         self._cancel = False
 
     def cancel(self):
@@ -56,6 +57,7 @@ class _BatchWorker(QThread):
             self._engine, self._items, self._settings, self._out_dir, self._formats,
             progress_cb=lambda done, total: self.progress.emit(done, total),
             should_cancel=lambda: self._cancel,
+            template=self._template,
         )
         self.done.emit(result)
 
@@ -120,6 +122,14 @@ class QRBatchDialog(QDialog):
         self.chk_dedup.toggled.connect(self._update_summary)
         layout.addWidget(self.chk_dedup)
 
+        tpl_row = QHBoxLayout()
+        tpl_row.addWidget(QLabel("Modèle :"))
+        self.combo_template = QComboBox()
+        self.combo_template.currentIndexChanged.connect(self._on_template_changed)
+        tpl_row.addWidget(self.combo_template, 1)
+        layout.addLayout(tpl_row)
+        self._populate_templates()
+
         fmt_row = QHBoxLayout()
         fmt_row.addWidget(QLabel("Formats :"))
         self.chk_png = QCheckBox("PNG")
@@ -180,6 +190,40 @@ class QRBatchDialog(QDialog):
     # ------------------------------------------------------------------ #
     #  Import & mapping                                                    #
     # ------------------------------------------------------------------ #
+
+    def _populate_templates(self):
+        """Card templates saved from the designer; with one selected, each row
+        becomes a composed card PDF (fond + QR + textes variables) instead of
+        a bare QR file."""
+        from src.core.engines.template_composer import TemplateStore
+
+        self.combo_template.blockSignals(True)
+        self.combo_template.clear()
+        self.combo_template.addItem("— aucun (QR seul) —", None)
+        try:
+            for tpl in TemplateStore().list():
+                self.combo_template.addItem(tpl.name, str(tpl.id))
+        except Exception:
+            pass
+        self.combo_template.blockSignals(False)
+
+    def _on_template_changed(self):
+        # Template output is always a composed vector PDF.
+        use_template = self.combo_template.currentData() is not None
+        for chk in (self.chk_png, self.chk_svg, self.chk_pdf):
+            chk.setEnabled(not use_template)
+
+    def _current_template(self):
+        template_id = self.combo_template.currentData()
+        if template_id is None:
+            return None
+        from src.core.engines.template_composer import TemplateStore
+
+        try:
+            return TemplateStore().load(template_id)
+        except Exception as e:
+            QMessageBox.warning(self, "Modèle illisible", str(e))
+            return None
 
     def _default_out_dir(self) -> Optional[Path]:
         try:
@@ -292,8 +336,9 @@ class QRBatchDialog(QDialog):
         if plan is None or plan.total == 0:
             QMessageBox.information(self, "Rien à générer", "Aucun QR code à produire.")
             return
+        template = self._current_template()
         formats = self._selected_formats()
-        if not formats:
+        if template is None and not formats:
             QMessageBox.information(self, "Format manquant", "Sélectionnez au moins un format.")
             return
         if self.out_dir is None:
@@ -307,7 +352,8 @@ class QRBatchDialog(QDialog):
         self.status_label.setText("Génération en cours…")
 
         self.worker = _BatchWorker(
-            self.engine, plan.items, self.settings, self.out_dir, formats, self
+            self.engine, plan.items, self.settings, self.out_dir, formats,
+            template=template, parent=self,
         )
         self.worker.progress.connect(self._on_progress)
         self.worker.done.connect(self._on_done)
@@ -335,8 +381,12 @@ class QRBatchDialog(QDialog):
     def _set_running(self, running: bool):
         self.btn_generate.setText("[ANNULER]" if running else "[GÉNÉRER LE LOT]")
         for w in (self.btn_import, self.btn_out, self.chk_dedup, self.chk_png,
-                  self.chk_svg, self.chk_pdf, self.combo_url, self.combo_name, self.combo_qty):
+                  self.chk_svg, self.chk_pdf, self.combo_url, self.combo_name,
+                  self.combo_qty, self.combo_template):
             w.setEnabled(not running)
+        if not running:
+            # Re-apply the template rule (formats stay locked with a template).
+            self._on_template_changed()
 
     def _export_zip(self):
         if not self.result or self.result.succeeded == 0:

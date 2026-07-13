@@ -140,11 +140,46 @@ class QRCodeSettings(BaseModel):
 class QRItem(BaseModel):
     """One row of a batch = one QR code to produce. `data` is the encoded
     URL/text; `filename` is the output base name (from a configurable import
-    column); `quantity` is how many copies to place when imposed on a sheet."""
+    column); `quantity` is how many copies to place when imposed on a sheet.
+    `row` keeps the full imported row so template text zones can substitute
+    {Colonne} placeholders with per-row values (variable-data printing)."""
     id: UUID = Field(default_factory=uuid4)
     data: str
     filename: str = ""
     quantity: int = 1
+    row: dict = Field(default_factory=dict)
+
+
+class TemplateQRZone(BaseModel):
+    """Where the QR code lands on a card template (top-left corner + side)."""
+    x_mm: float = 5.0
+    y_mm: float = 5.0
+    size_mm: float = 20.0
+
+
+class TemplateTextZone(BaseModel):
+    """A text block on a card template. `text` may contain {Colonne}
+    placeholders, substituted from the imported row at composition time."""
+    id: UUID = Field(default_factory=uuid4)
+    text: str = "Texte"
+    x_mm: float = 5.0
+    y_mm: float = 5.0
+    font_size_pt: float = 10.0
+    color: str = "#000000"
+    bold: bool = False
+
+
+class CardTemplate(BaseModel):
+    """A print template ("modèle") — QR card, business card, sticker, poster…
+    Optionally backed by an imported PDF used as the background artwork; the
+    QR zone and text zones are stamped on top by TemplateComposer."""
+    id: UUID = Field(default_factory=uuid4)
+    name: str = "Nouveau modèle"
+    width_mm: float = 85.0
+    height_mm: float = 55.0
+    base_pdf: Optional[Path] = None
+    qr_zone: TemplateQRZone = Field(default_factory=TemplateQRZone)
+    texts: List[TemplateTextZone] = Field(default_factory=list)
 
 
 class JobStats(BaseModel):
