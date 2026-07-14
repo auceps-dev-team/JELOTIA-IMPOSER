@@ -137,6 +137,11 @@ class MainWindow(QMainWindow):
             export_format=export_format,
             export_dpi=int(config.get("export", "dpi") or 300),
             generate_thumbnail=True,
+            plotter_marks=str(config.get("imposition", "plotter_marks") or "none"),
+            plotter_mark_length_mm=float(
+                config.get("imposition", "plotter_mark_length") or 15.0
+            ),
+            cut_contour_spot=bool(config.get("export", "cut_contour")),
         )
 
     # Priority labels (JobDialog) -> queue rank (WorkerPoolManager).

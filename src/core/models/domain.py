@@ -75,6 +75,25 @@ class JobSettings(BaseModel):
     generate_thumbnail: bool = True
     separate_cut_layer: bool = False
 
+    # Plotter registration marks (Graphtec ARMS): "none", "graphtec1"
+    # (L arms pointing OUT toward the media corners) or "graphtec2"
+    # (L arms pointing IN toward the artwork) — must match the mark type
+    # configured in the plotter's ARMS menu.
+    plotter_marks: str = "none"
+    plotter_mark_length_mm: float = 15.0
+    plotter_mark_thickness_mm: float = 0.5
+    plotter_mark_margin_mm: float = 5.0
+
+    # Print & cut RIPs: stroke every pose with the "CutContour" spot color.
+    cut_contour_spot: bool = False
+
+    def plotter_reserve_mm(self) -> float:
+        """Margin the nesting must reserve so no pose collides with the ARMS
+        marks (mark inset + arm length + quiet zone for reliable sensing)."""
+        if self.plotter_marks == "none":
+            return 0.0
+        return self.plotter_mark_margin_mm + self.plotter_mark_length_mm + 3.0
+
 
 class FileItem(BaseModel):
     id: UUID = Field(default_factory=uuid4)

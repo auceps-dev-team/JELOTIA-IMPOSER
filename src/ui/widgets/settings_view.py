@@ -159,11 +159,23 @@ class SettingsWidget(QWidget):
         self.margin.setMaximum(500)
         self.rotation_allowed = QCheckBox("Autoriser la rotation automatique")
 
+        # Graphtec ARMS registration marks: the type must match the plotter's
+        # ARMS menu; the nesting automatically reserves the marks' margin.
+        self.plotter_marks = self._style_input(QComboBox())
+        self.plotter_marks.addItems(
+            ["Aucun", "Graphtec ARMS — type 1", "Graphtec ARMS — type 2"]
+        )
+        self.plotter_mark_length = self._style_input(QSpinBox())
+        self.plotter_mark_length.setRange(5, 20)
+        self.plotter_mark_length.setValue(15)
+
         layout.addRow("Largeur Planche (mm):", self.sheet_width)
         layout.addRow("Hauteur Planche (mm):", self.sheet_height)
         layout.addRow("Espacement entre poses (mm):", self.spacing)
         layout.addRow("Marge autour de la planche (mm):", self.margin)
         layout.addRow("", self.rotation_allowed)
+        layout.addRow("Repères plotter:", self.plotter_marks)
+        layout.addRow("Longueur des repères (mm):", self.plotter_mark_length)
 
     def setup_tab_preflight(self):
         tab, layout = self._create_form_tab("Preflight")
@@ -193,11 +205,16 @@ class SettingsWidget(QWidget):
 
         self.icc_profile = self._style_input(QLineEdit())
 
+        self.cut_contour = QCheckBox(
+            "Couche CutContour (ton direct) sur les planches — RIP print & cut"
+        )
+
         layout.addRow("Format de sortie:", self.export_format)
         layout.addRow("Résolution (DPI):", self.export_dpi)
         layout.addRow("Archiver pendant (jours):", self.archive_days)
         layout.addRow("", self.enable_notifications)
         layout.addRow("Profil ICC:", self.icc_profile)
+        layout.addRow("", self.cut_contour)
 
     def setup_tab_users(self):
         tab, layout = self._create_form_tab("Utilisateurs")
@@ -274,6 +291,13 @@ class SettingsWidget(QWidget):
         self.spacing.setValue(self.config.get("imposition", "spacing") or 5)
         self.margin.setValue(self.config.get("imposition", "margin") or 0)
         self.rotation_allowed.setChecked(self.config.get("imposition", "rotation_allowed") or False)
+        marks_index = {"none": 0, "graphtec1": 1, "graphtec2": 2}.get(
+            self.config.get("imposition", "plotter_marks") or "none", 0
+        )
+        self.plotter_marks.setCurrentIndex(marks_index)
+        self.plotter_mark_length.setValue(
+            int(self.config.get("imposition", "plotter_mark_length") or 15)
+        )
 
         # Preflight
         self.min_dpi.setValue(self.config.get("preflight", "min_dpi") or 300)
@@ -285,6 +309,7 @@ class SettingsWidget(QWidget):
             idx = self.export_format.findText(fmt)
             if idx >= 0: self.export_format.setCurrentIndex(idx)
         self.export_dpi.setValue(self.config.get("export", "dpi") or 300)
+        self.cut_contour.setChecked(self.config.get("export", "cut_contour") or False)
 
         # Output & Archive
         self.archive_days.setValue(self.config.get("output", "archive_days") or 15)
@@ -325,6 +350,11 @@ class SettingsWidget(QWidget):
         self.config.set("imposition", "spacing", self.spacing.value())
         self.config.set("imposition", "margin", self.margin.value())
         self.config.set("imposition", "rotation_allowed", self.rotation_allowed.isChecked())
+        self.config.set(
+            "imposition", "plotter_marks",
+            ("none", "graphtec1", "graphtec2")[self.plotter_marks.currentIndex()],
+        )
+        self.config.set("imposition", "plotter_mark_length", self.plotter_mark_length.value())
 
         # Preflight
         self.config.set("preflight", "min_dpi", self.min_dpi.value())
@@ -333,6 +363,7 @@ class SettingsWidget(QWidget):
         # Export
         self.config.set("export", "format", self.export_format.currentText())
         self.config.set("export", "dpi", self.export_dpi.value())
+        self.config.set("export", "cut_contour", self.cut_contour.isChecked())
 
         # Output & Archive
         self.config.set("output", "archive_days", self.archive_days.value())

@@ -481,7 +481,10 @@ class NestingEngine:
             if item.preflight_status in (PreflightStatus.OK, PreflightStatus.WARNING)
         ]
 
-        margin = settings.margin_mm or 0.0
+        # ARMS plotter marks live in the sheet's margin band: the nesting must
+        # reserve at least that much or poses would cover the marks and break
+        # the plotter's sensing.
+        margin = max(settings.margin_mm or 0.0, settings.plotter_reserve_mm())
         if margin <= 0:
             return self.strategy.pack(valid_items, settings)
 

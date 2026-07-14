@@ -38,8 +38,19 @@ class LayoutEngine:
         base_pdf = fitz.open("pdf", packet)
         base_page = base_pdf[0]
         self._stamp_artwork(base_page, sheet)
+
+        # 3. CutContour spot overlay ON TOP of the artwork (RIPs extract the
+        # spot; drawn under the artwork it would be partially covered). The
+        # overlay doc must stay open until the target is saved (fitz rule).
+        overlay_doc = None
+        if settings.cut_contour_spot and sheet.items:
+            overlay_doc = self._cut_contour_overlay(sheet)
+            base_page.show_pdf_page(base_page.rect, overlay_doc, 0)
+
         base_pdf.save(str(export_path))
         base_pdf.close()
+        if overlay_doc is not None:
+            overlay_doc.close()
 
         logger.info(f"Generated sheet PDF: {export_path}")
         return export_path
@@ -73,6 +84,9 @@ class LayoutEngine:
 
         self._draw_metadata(c, job_id, sheet)
         self._draw_item_marks(c, sheet, settings)
+
+        if settings.plotter_marks != "none":
+            self._draw_plotter_marks(c, sheet, settings)
 
         if settings.add_qr_code:
             self._draw_qr_code(c, job_id, sheet, settings)
@@ -121,6 +135,83 @@ class LayoutEngine:
                 # Top-right
                 c.line(x + w + crop_off, y + h, x + w + crop_off + crop_len, y + h)
                 c.line(x + w, y + h + crop_off, x + w, y + h + crop_off + crop_len)
+
+    # ------------------------------------------------------------------ #
+    #  Graphtec ARMS registration marks                                    #
+    # ------------------------------------------------------------------ #
+
+    def _draw_plotter_marks(
+        self, c: canvas.Canvas, sheet: Sheet, settings: JobSettings
+    ) -> None:
+        """Four L-shaped corner marks for Graphtec ARMS sensing, in 100K black.
+
+        Both arms of each L occupy the band [inset, inset + length] from the
+        sheet edges; what differs between the two mark types is orientation:
+        - graphtec1: the L's corner sits at (inset+length) and its arms point
+          OUT toward the media corner;
+        - graphtec2: the L's corner sits at (inset) and its arms point IN
+          toward the artwork.
+        The nesting reserves plotter_reserve_mm() so poses never touch them.
+        """
+        from reportlab.lib.colors import CMYKColor
+
+        inset = settings.plotter_mark_margin_mm
+        length = settings.plotter_mark_length_mm
+        width_mm_ = sheet.width_mm
+        height_mm_ = sheet.height_mm
+
+        c.setStrokeColor(CMYKColor(0, 0, 0, 1))
+        c.setLineWidth(settings.plotter_mark_thickness_mm * mm)
+        c.setLineCap(0)  # butt caps: arm length stays exactly `length`
+
+        outward = settings.plotter_marks == "graphtec1"
+        # Corner definitions: (x_edge, y_edge, x_dir, y_dir) where dirs point
+        # INTO the sheet from that corner.
+        corners = (
+            (0.0, 0.0, 1, 1),
+            (width_mm_, 0.0, -1, 1),
+            (0.0, height_mm_, 1, -1),
+            (width_mm_, height_mm_, -1, -1),
+        )
+        for x_edge, y_edge, dx, dy in corners:
+            near = inset          # arm end closest to the media corner
+            far = inset + length  # arm end closest to the artwork
+            # The L's corner point:
+            cx = x_edge + dx * (far if outward else near)
+            cy = y_edge + dy * (far if outward else near)
+            # Arms run back toward the media corner (type 1) or into the
+            # sheet (type 2) — both spanning [near, far].
+            hx = x_edge + dx * (near if outward else far)
+            vy = y_edge + dy * (near if outward else far)
+            c.line(cx * mm, cy * mm, hx * mm, cy * mm)  # horizontal arm
+            c.line(cx * mm, cy * mm, cx * mm, vy * mm)  # vertical arm
+
+    # ------------------------------------------------------------------ #
+    #  CutContour spot overlay                                             #
+    # ------------------------------------------------------------------ #
+
+    def _cut_contour_overlay(self, sheet: Sheet) -> fitz.Document:
+        """A one-page PDF containing only the poses' outlines stroked in the
+        'CutContour' separation (spot) color — the convention print & cut
+        RIPs (VersaWorks, Onyx, Caldera, Cutting Master) extract as the cut
+        path. Overlaid on top of the finished sheet by generate_sheet_pdf."""
+        from reportlab.lib.colors import CMYKColorSep
+
+        packet = io.BytesIO()
+        c = canvas.Canvas(packet, pagesize=(sheet.width_mm * mm, sheet.height_mm * mm))
+        spot = CMYKColorSep(0, 1.0, 0, 0, spotName="CutContour")
+        c.setStrokeColor(spot)
+        c.setLineWidth(0.25)
+        try:
+            c.setStrokeOverprint(True)  # cut line must not knock out the print
+        except AttributeError:  # very old reportlab
+            pass
+        for item in sheet.items:
+            c.rect(item.x_mm * mm, item.y_mm * mm,
+                   item.width_mm * mm, item.height_mm * mm)
+        c.save()
+        packet.seek(0)
+        return fitz.open("pdf", packet.read())
 
     # ------------------------------------------------------------------ #
     #  QR Code                                                             #
