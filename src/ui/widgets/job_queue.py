@@ -28,6 +28,8 @@ class JobsWidget(QWidget):
     view_details_requested = Signal(str)   # emits job_name
     cancel_job_requested = Signal(str)
     resume_job_requested = Signal(str)
+    delete_job_requested = Signal(str)
+    archive_job_requested = Signal(str)
     job_created = Signal(str, list, dict)  # emits (job_name, file_paths:list[str], overrides:dict)
 
     def __init__(self):
@@ -141,24 +143,93 @@ class JobsWidget(QWidget):
         self.table.setItem(row, _COL_SHEETS, QTableWidgetItem("0"))
         self.table.setItem(row, _COL_DATE, QTableWidgetItem(date_str))
 
-        btn = QPushButton("DÉTAILS →")
-        btn.setObjectName("details_btn")
-        # Compact padding: the app-wide QPushButton padding (7px 14px) makes
-        # the button taller/wider than a table cell, so the text gets clipped.
-        btn.setStyleSheet(
-            f"border:none; color:{_T.ACCENT_TEXT}; font-weight:600; padding:2px 8px;"
-        )
-        btn.clicked.connect(lambda: self.view_details_requested.emit(name))
-        self.table.setCellWidget(row, _COL_ACTIONS, btn)
+        actions = self._build_action_cell(name)
+        self.table.setCellWidget(row, _COL_ACTIONS, actions)
 
-        hint = btn.sizeHint()
-        if self.table.columnWidth(_COL_ACTIONS) < hint.width() + 12:
-            self.table.setColumnWidth(_COL_ACTIONS, hint.width() + 12)
+        hint = actions.sizeHint()
+        if self.table.columnWidth(_COL_ACTIONS) < hint.width() + 8:
+            self.table.setColumnWidth(_COL_ACTIONS, hint.width() + 8)
         if self.table.rowHeight(row) < hint.height() + 8:
             self.table.setRowHeight(row, hint.height() + 8)
 
         self._update_stats()
         return row
+
+    def _build_action_cell(self, name: str) -> QWidget:
+        """Per-row action buttons. Compact padding: the app-wide QPushButton
+        padding would make them taller than the cell and clip the text."""
+        cell = QWidget()
+        layout = QHBoxLayout(cell)
+        layout.setContentsMargins(4, 2, 4, 2)
+        layout.setSpacing(6)
+
+        def make(label: str, color: str, tooltip: str) -> QPushButton:
+            btn = QPushButton(label)
+            btn.setStyleSheet(
+                f"border:none; color:{color}; font-weight:600; padding:2px 6px;"
+            )
+            btn.setToolTip(tooltip)
+            layout.addWidget(btn)
+            return btn
+
+        btn_details = make("DÉTAILS", _T.ACCENT_TEXT, "Voir les planches du job")
+        btn_relaunch = make("RELANCER", _T.STATE_OK,
+                            "Relancer un job échoué ou bloqué en attente")
+        btn_archive = make("ARCH.", _T.TEXT_MUTE,
+                           "Archiver : retire le job de la vue en le conservant en base")
+        btn_delete = make("SUPPR.", _T.STATE_ERR, "Supprimer définitivement le job")
+
+        btn_details.clicked.connect(lambda: self.view_details_requested.emit(name))
+        btn_relaunch.clicked.connect(lambda: self._relaunch_job(name))
+        btn_archive.clicked.connect(lambda: self.archive_job_requested.emit(name))
+        btn_delete.clicked.connect(lambda: self._confirm_delete(name))
+        return cell
+
+    def _row_status(self, name: str) -> str:
+        row = self._find_row_by_name(name)
+        if row == -1:
+            return ""
+        item = self.table.item(row, _COL_STATUS)
+        return item.data(Qt.ItemDataRole.UserRole) if item else ""
+
+    def _relaunch_job(self, name: str):
+        status = self._row_status(name)
+        if status == "PROCESSING":
+            QMessageBox.information(
+                self, "Job en cours",
+                f"{name} est en cours de traitement — attendez sa fin avant de relancer."
+            )
+            return
+        row = self._find_row_by_name(name)
+        if row != -1:
+            self._set_status_item(row, "PENDING")
+            self._update_stats()
+        self.resume_job_requested.emit(name)
+
+    def _confirm_delete(self, name: str):
+        status = self._row_status(name)
+        extra = " (il est EN COURS de traitement !)" if status == "PROCESSING" else ""
+        reply = QMessageBox.question(
+            self, "Supprimer le job",
+            f"Supprimer définitivement « {name} »{extra} ?\n"
+            "Ses planches et fichiers suivis seront retirés de la base.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.delete_job_requested.emit(name)
+
+    def remove_job_row(self, name: str) -> None:
+        """Removes the row and renumbers the NUM column (used by delete and
+        archive — the DB, not this table, is the source of truth)."""
+        row = self._find_row_by_name(name)
+        if row == -1:
+            return
+        self.table.removeRow(row)
+        for r in range(self.table.rowCount()):
+            item = self.table.item(r, _COL_NUM)
+            if item:
+                item.setText(f"{r + 1:02d}")
+        self._update_stats()
 
     def _set_status_item(self, row: int, status: str) -> None:
         item = QTableWidgetItem(status_bracket_text(status))

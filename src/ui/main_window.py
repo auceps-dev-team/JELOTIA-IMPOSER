@@ -415,6 +415,8 @@ class MainWindow(QMainWindow):
         self.jobs_view = JobsWidget()
         self.jobs_view.cancel_job_requested.connect(self.handle_cancel_job)
         self.jobs_view.resume_job_requested.connect(self.handle_resume_job)
+        self.jobs_view.delete_job_requested.connect(self.handle_delete_job)
+        self.jobs_view.archive_job_requested.connect(self.handle_archive_job)
         self.jobs_view.job_created.connect(self._on_job_created)
         self.jobs_view.view_details_requested.connect(self.show_preview)
 
@@ -618,6 +620,39 @@ class MainWindow(QMainWindow):
     def handle_cancel_job(self, job_name: str):
         self._log(f"Job annulé: {job_name}")
         self.notifier.notify("Job Annulé", job_name, False)
+
+    def _forget_job(self, job_name: str) -> None:
+        """Drops every in-memory trace of a job (row + caches) after it was
+        deleted or archived; the DB is the source of truth."""
+        self.jobs_view.remove_job_row(job_name)
+        job_id = self._job_ids.pop(job_name, None)
+        if job_id is not None:
+            self.jobs_view.job_uuid_map.pop(str(job_id), None)
+        for cache in (self._job_sheets, self._job_settings, self._job_source_paths,
+                      self._job_group_state):
+            cache.pop(job_name, None)
+
+    def handle_delete_job(self, job_name: str):
+        """Permanent removal (already confirmed by the Jobs view)."""
+        job_id = self._job_ids.get(job_name)
+        if job_id is not None:
+            self.db.delete_job(str(job_id))
+        self._forget_job(job_name)
+        self._log(f"Job supprimé : {job_name}")
+        self._refresh_dashboard()
+
+    def handle_archive_job(self, job_name: str):
+        """Hides the job from the view while keeping it (and its production
+        history) in the DB for potential reuse."""
+        job_id = self._job_ids.get(job_name)
+        if job_id is None:
+            self._forget_job(job_name)
+            return
+        if self.db.set_job_archived(str(job_id), True):
+            self._forget_job(job_name)
+            self._log(f"Job archivé : {job_name}")
+        else:
+            self._log(f"Archivage impossible : {job_name}")
 
     def handle_resume_job(self, job_name: str):
         """Actually re-runs a failed job through the whole pipeline again,

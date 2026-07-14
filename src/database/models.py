@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, Column, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import JSON, Boolean, Column, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import DeclarativeBase, relationship
 
 
@@ -26,6 +26,9 @@ class JobModel(Base):
     # job can actually be resumed (re-run through the whole pipeline) rather
     # than just having its status reset with nothing to re-process.
     source_paths = Column(JSON, nullable=False, default=list)
+    # Archived jobs are hidden from the Jobs view but kept in the DB (and
+    # still count in dashboard/production history) for potential reuse.
+    archived = Column(Boolean, nullable=False, default=False)
 
     files = relationship("FileItemModel", back_populates="job", cascade="all, delete-orphan")
     sheets = relationship("SheetModel", back_populates="job", cascade="all, delete-orphan")

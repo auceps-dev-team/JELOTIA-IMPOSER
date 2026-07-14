@@ -171,6 +171,55 @@ def test_get_all_jobs_returns_every_job(repo):
     assert {j.name for j in all_jobs} == {"Job A", "Job B"}
 
 
+def test_delete_job_removes_row_and_children(repo):
+    job_id = str(uuid.uuid4())
+    repo.create_job_stub(job_id, "À supprimer", ["a.pdf"], JobSettings())
+    repo.update_job_sheets(job_id, [Sheet(job_id=uuid.UUID(job_id), sheet_number=1)])
+
+    assert repo.delete_job(job_id) is True
+    assert repo.get_job(job_id) is None
+    assert repo.get_all_jobs() == []
+    assert repo.delete_job(job_id) is False  # already gone
+
+
+def test_archive_job_hides_but_keeps_row(repo):
+    job_id = str(uuid.uuid4())
+    repo.create_job_stub(job_id, "À archiver", ["a.pdf"], JobSettings())
+
+    assert repo.set_job_archived(job_id, True) is True
+    assert repo.get_all_jobs() == [], "un job archivé disparaît de la vue par défaut"
+    archived = repo.get_all_jobs(include_archived=True)
+    assert len(archived) == 1 and archived[0].archived is True
+
+    assert repo.set_job_archived(job_id, False) is True
+    assert len(repo.get_all_jobs()) == 1, "désarchiver le fait réapparaître"
+
+
+def test_schema_migration_adds_archived_column(tmp_path):
+    """A field DB created before jobs.archived must be upgraded in place."""
+    import sqlite3
+
+    db_file = tmp_path / "old.db"
+    con = sqlite3.connect(str(db_file))
+    con.execute(
+        "CREATE TABLE jobs (id VARCHAR(36) PRIMARY KEY, name VARCHAR(255) NOT NULL, "
+        "status VARCHAR(50) NOT NULL, created_at DATETIME, settings JSON NOT NULL, "
+        "stats JSON NOT NULL, source_paths JSON NOT NULL)"
+    )
+    con.execute(
+        "INSERT INTO jobs (id, name, status, settings, stats, source_paths) "
+        "VALUES ('old-job', 'Ancien', 'DONE', '{}', '{}', '[]')"
+    )
+    con.commit()
+    con.close()
+
+    repo = DatabaseRepository(str(db_file))
+    jobs = repo.get_all_jobs()
+    assert [j.id for j in jobs] == ["old-job"], "l'ancien job survit à la migration"
+    assert repo.set_job_archived("old-job", True) is True
+    assert repo.get_all_jobs() == []
+
+
 def test_get_dashboard_stats_aggregates_from_db(repo):
     """The dashboard reads live counts from the DB (no more hand-nudged label
     counters): active = PENDING+PROCESSING jobs, preflight_errors = files in

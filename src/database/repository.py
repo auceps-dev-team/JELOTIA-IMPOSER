@@ -20,7 +20,24 @@ class DatabaseRepository:
         self.engine = create_engine(db_url)
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
         Base.metadata.create_all(bind=self.engine)
+        self._migrate_schema()
         logger.info(f"Database initialized at {db_url}")
+
+    def _migrate_schema(self) -> None:
+        """create_all only creates missing TABLES — it never adds new columns
+        to existing ones. Field databases predate `jobs.archived`, so add it
+        in place if absent (SQLite ALTER TABLE ADD COLUMN is cheap and safe)."""
+        try:
+            with self.engine.connect() as conn:
+                cols = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(jobs)")]
+                if cols and "archived" not in cols:
+                    conn.exec_driver_sql(
+                        "ALTER TABLE jobs ADD COLUMN archived BOOLEAN NOT NULL DEFAULT 0"
+                    )
+                    conn.commit()
+                    logger.info("Schema migrated: jobs.archived column added")
+        except SQLAlchemyError as e:
+            logger.error(f"Schema migration failed: {e}")
 
     def get_session(self) -> Session:
         return self.SessionLocal()
@@ -196,15 +213,52 @@ class DatabaseRepository:
         finally:
             session.close()
 
-    def get_all_jobs(self) -> List[JobModel]:
-        """Retrieve all jobs, eagerly loading relationships."""
+    def delete_job(self, job_id: str) -> bool:
+        """Permanently removes a job and its files/sheets rows."""
         session = self.get_session()
         try:
-            jobs = (
-                session.query(JobModel)
-                .options(subqueryload(JobModel.files), subqueryload(JobModel.sheets))
-                .all()
+            job = session.query(JobModel).filter(JobModel.id == job_id).first()
+            if job is None:
+                return False
+            session.delete(job)  # cascade removes files + sheets
+            session.commit()
+            return True
+        except SQLAlchemyError as e:
+            session.rollback()
+            logger.error(f"Error deleting job {job_id}: {e}")
+            return False
+        finally:
+            session.close()
+
+    def set_job_archived(self, job_id: str, archived: bool) -> bool:
+        """Hides (or restores) a job from the Jobs view; the row and its
+        sheets stay in the DB and keep counting in production history."""
+        session = self.get_session()
+        try:
+            job = session.query(JobModel).filter(JobModel.id == job_id).first()
+            if job is None:
+                return False
+            job.archived = archived
+            session.commit()
+            return True
+        except SQLAlchemyError as e:
+            session.rollback()
+            logger.error(f"Error archiving job {job_id}: {e}")
+            return False
+        finally:
+            session.close()
+
+    def get_all_jobs(self, include_archived: bool = False) -> List[JobModel]:
+        """Retrieve all jobs, eagerly loading relationships. Archived jobs are
+        excluded unless explicitly requested."""
+        session = self.get_session()
+        try:
+            query = session.query(JobModel).options(
+                subqueryload(JobModel.files), subqueryload(JobModel.sheets)
             )
+            if not include_archived:
+                query = query.filter(JobModel.archived.is_(False))
+            jobs = query.all()
             for job in jobs:
                 # Force load
                 job.files
