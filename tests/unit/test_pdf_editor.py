@@ -2,7 +2,7 @@ import fitz
 import pytest
 from PIL import Image
 
-from src.core.engines.pdf_editor import PdfEditError, PdfEditSession
+from src.core.engines.pdf_editor import PdfEditError, PdfEditSession, repair_pdf
 
 
 def _make_pdf(path, labels, width=200, height=300):
@@ -448,6 +448,37 @@ def test_render_page_and_size(session):
     w_mm, h_mm = session.page_size_mm(0)
     assert w_mm == pytest.approx(200 / 72 * 25.4, abs=0.1)
     assert h_mm == pytest.approx(300 / 72 * 25.4, abs=0.1)
+
+
+def test_repair_pdf_normalizes_valid_file(sample_pdf, tmp_path):
+    out = repair_pdf(sample_pdf, tmp_path / "repare.pdf")
+    doc = fitz.open(str(out))
+    assert doc.page_count == 3
+    assert "PAGE A" in doc[0].get_text()
+    doc.close()
+
+
+def test_repair_pdf_recovers_broken_xref(sample_pdf, tmp_path):
+    """qpdf rebuilds the xref of a file whose startxref offset is corrupt."""
+    data = sample_pdf.read_bytes()
+    marker = data.rfind(b"startxref")
+    assert marker != -1
+    broken = tmp_path / "casse.pdf"
+    broken.write_bytes(data[:marker] + b"startxref\n999999999\n%%EOF\n")
+
+    out = repair_pdf(broken, tmp_path / "repare.pdf")
+    doc = fitz.open(str(out))
+    assert doc.page_count == 3
+    doc.close()
+
+
+def test_repair_pdf_rejects_garbage_and_same_path(tmp_path, sample_pdf):
+    garbage = tmp_path / "garbage.pdf"
+    garbage.write_bytes(b"ceci n'est pas un pdf")
+    with pytest.raises(PdfEditError):
+        repair_pdf(garbage, tmp_path / "out.pdf")
+    with pytest.raises(PdfEditError):
+        repair_pdf(sample_pdf, sample_pdf)
 
 
 def test_operations_require_open_document():

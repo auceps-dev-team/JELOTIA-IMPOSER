@@ -14,6 +14,28 @@ class PdfEditError(Exception):
     """Raised when a PDF edit operation can't be performed."""
 
 
+def repair_pdf(src: Path, dest: Path) -> Path:
+    """Rewrites a damaged or non-conforming PDF through pikepdf (qpdf): the
+    xref is rebuilt, objects are normalized and the structure is made
+    standard-compliant — the tool of choice when a customer file won't open
+    or a RIP rejects it. The source file is never modified."""
+    try:
+        import pikepdf
+    except ImportError as e:  # pragma: no cover - declared dependency
+        raise PdfEditError("pikepdf est requis pour la réparation.") from e
+
+    src, dest = Path(src), Path(dest)
+    if src.resolve() == dest.resolve():
+        raise PdfEditError("Choisissez un fichier de sortie différent de l'original.")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with pikepdf.open(str(src)) as pdf:
+            pdf.save(str(dest))
+    except Exception as e:
+        raise PdfEditError(f"Réparation impossible ({src.name}) : {e}") from e
+    return dest
+
+
 class PdfEditSession:
     """An in-memory PDF editing session: page-level operations (rotate,
     delete, move, duplicate, merge, extract) plus text/image stamping, with a

@@ -31,7 +31,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.core.engines.pdf_editor import PdfEditError, PdfEditSession
+from src.core.engines.pdf_editor import PdfEditError, PdfEditSession, repair_pdf
 from src.ui.theme import ThemeManager
 
 _T = ThemeManager
@@ -563,6 +563,12 @@ class PdfEditorWidget(QWidget):
         self.btn_open.clicked.connect(self._open_pdf)
         self.btn_merge = QPushButton("[+ FUSIONNER…]")
         self.btn_merge.clicked.connect(self._merge_pdf)
+        self.btn_repair = QPushButton("[RÉPARER…]")
+        self.btn_repair.setToolTip(
+            "Réécrit un PDF endommagé ou non conforme via qpdf "
+            "(xref reconstruite, structure normalisée) — l'original n'est pas modifié."
+        )
+        self.btn_repair.clicked.connect(self._repair_pdf)
         self.btn_undo = QPushButton("ANNULER")
         self.btn_undo.clicked.connect(self._undo)
         self.info_label = QLabel("Aucun PDF ouvert")
@@ -574,6 +580,7 @@ class PdfEditorWidget(QWidget):
 
         bar.addWidget(self.btn_open)
         bar.addWidget(self.btn_merge)
+        bar.addWidget(self.btn_repair)
         bar.addWidget(self.btn_undo)
         bar.addWidget(self.info_label, 1)
         bar.addWidget(self.btn_save)
@@ -890,11 +897,63 @@ class PdfEditorWidget(QWidget):
         try:
             self.session.open(Path(path))
         except PdfEditError as e:
-            QMessageBox.warning(self, "Erreur", str(e))
+            # A file fitz refuses to parse can often be salvaged by qpdf —
+            # offer the repair right away instead of a dead end.
+            reply = QMessageBox.question(
+                self, "PDF illisible",
+                f"{e}\n\nTenter une réparation (réécriture via qpdf) ?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+            src = Path(path)
+            repaired = src.with_name(f"{src.stem}_repare.pdf")
+            try:
+                repair_pdf(src, repaired)
+                self.session.open(repaired)
+            except PdfEditError as e2:
+                QMessageBox.warning(self, "Réparation impossible", str(e2))
+                return
+            self.status_label.setText(f"Fichier réparé et ouvert : {repaired}")
+            self.stamps = []
+            self._refresh_all(keep_index=0)
             return
         self.stamps = []
         self.status_label.setText("")
         self._refresh_all(keep_index=0)
+
+    def _repair_pdf(self):
+        src_path, _ = QFileDialog.getOpenFileName(
+            self, "PDF à réparer", "", "PDF (*.pdf)"
+        )
+        if not src_path:
+            return
+        src = Path(src_path)
+        dest_path, _ = QFileDialog.getSaveFileName(
+            self, "Enregistrer le PDF réparé",
+            str(src.with_name(f"{src.stem}_repare.pdf")), "PDF (*.pdf)",
+        )
+        if not dest_path:
+            return
+        try:
+            repair_pdf(src, Path(dest_path))
+        except PdfEditError as e:
+            QMessageBox.warning(self, "Réparation impossible", str(e))
+            return
+        reply = QMessageBox.question(
+            self, "Réparation terminée",
+            f"PDF réparé :\n{dest_path}\n\nL'ouvrir dans l'éditeur ?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                self.session.open(Path(dest_path))
+            except PdfEditError as e:
+                QMessageBox.warning(self, "Erreur", str(e))
+                return
+            self.stamps = []
+            self.status_label.setText(f"Fichier réparé ouvert : {dest_path}")
+            self._refresh_all(keep_index=0)
 
     def _merge_pdf(self):
         path, _ = QFileDialog.getOpenFileName(self, "Fusionner un PDF", "", "PDF (*.pdf)")
