@@ -203,6 +203,18 @@ class CardTemplate(BaseModel):
     archived: bool = False
 
 
+class ProductPreset(BaseModel):
+    """A manufacturing preset ("gamme") — everything a recurring product needs
+    (sheet size, spacing, margins, ARMS marks, CutContour, export format…)
+    bundled under one name, selectable in one click at job creation instead of
+    re-entering the global settings for each order."""
+    id: UUID = Field(default_factory=uuid4)
+    name: str = "Nouvelle gamme"
+    support: str = ""  # media note for the operator (e.g. "Vinyle blanc 80µ")
+    settings: JobSettings = Field(default_factory=JobSettings)
+    archived: bool = False
+
+
 class JobStats(BaseModel):
     total_files: int = 0
     total_quantity: int = 0

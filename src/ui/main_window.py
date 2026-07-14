@@ -185,8 +185,21 @@ class MainWindow(QMainWindow):
 
         overrides = overrides or {}
         paths = [Path(f) for f in file_paths if Path(f).exists()]
-        # settings_override (job duplication) reuses the ORIGINAL job's
-        # settings instead of whatever the global config says today.
+
+        # A manufacturing preset ("gamme") carries the product's whole recipe.
+        preset_id = overrides.get("preset_id")
+        if settings_override is None and preset_id:
+            try:
+                from src.core.presets import PresetStore
+
+                preset = PresetStore().load(preset_id)
+                settings_override = preset.settings.model_copy()
+                self._log(f"Job {job_name} — gamme « {preset.name} »")
+            except Exception as e:
+                self._log(f"Gamme illisible ({e}) — réglages globaux utilisés")
+
+        # settings_override (job duplication / preset) reuses those settings
+        # instead of whatever the global config says today.
         settings = settings_override or self._build_job_settings()
         if overrides.get("sheet_width_mm"):
             settings.sheet_width_mm = overrides["sheet_width_mm"]

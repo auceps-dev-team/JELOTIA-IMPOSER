@@ -58,12 +58,24 @@ class JobDialog(QDialog):
         self.sheet_height_input.setSpecialValueText("Réglage global")
         self.sheet_height_input.setSuffix(" mm")
 
+        # Manufacturing preset ("gamme"): one pick applies the product's whole
+        # recipe (sheet, spacing, ARMS marks, CutContour, export) to this job.
+        preset_row = QHBoxLayout()
+        self.preset_combo = QComboBox()
+        self.btn_manage_presets = QPushButton("Gérer…")
+        self.btn_manage_presets.clicked.connect(self._manage_presets)
+        preset_row.addWidget(self.preset_combo, 1)
+        preset_row.addWidget(self.btn_manage_presets)
+
         form_layout.addRow("Nom du Job:", self.name_input)
+        form_layout.addRow("Gamme produit:", preset_row)
         form_layout.addRow("Priorité:", self.priority_combo)
         form_layout.addRow("Quantité par défaut:", self.quantity_spin)
         form_layout.addRow("Largeur planche (0 = global):", self.sheet_width_input)
         form_layout.addRow("Hauteur planche (0 = global):", self.sheet_height_input)
         layout.addLayout(form_layout)
+        self._reload_presets()
+        self.preset_combo.currentIndexChanged.connect(self._on_preset_selected)
 
         files_label = QLabel("Fichiers importés:")
         layout.addWidget(files_label)
@@ -103,6 +115,51 @@ class JobDialog(QDialog):
         btn_layout.addStretch()
         btn_layout.addWidget(self.btn_box)
         layout.addLayout(btn_layout)
+
+    def _reload_presets(self, select_id=None):
+        from src.core.presets import PresetStore
+
+        self.preset_combo.blockSignals(True)
+        self.preset_combo.clear()
+        self.preset_combo.addItem("— réglages globaux —", None)
+        try:
+            self._presets = PresetStore().list()
+        except Exception:
+            self._presets = []
+        for preset in self._presets:
+            support = f" · {preset.support}" if preset.support else ""
+            self.preset_combo.addItem(
+                f"{preset.name} ({preset.settings.sheet_width_mm:.0f}×"
+                f"{preset.settings.sheet_height_mm:.0f}{support})",
+                str(preset.id),
+            )
+        if select_id is not None:
+            index = self.preset_combo.findData(str(select_id))
+            if index >= 0:
+                self.preset_combo.setCurrentIndex(index)
+        self.preset_combo.blockSignals(False)
+        self._on_preset_selected()
+
+    def _on_preset_selected(self):
+        """Mirrors the preset's sheet size into the override spins (the full
+        recipe is applied by _submit_job via the preset itself)."""
+        preset_id = self.preset_combo.currentData()
+        if preset_id is None:
+            return
+        for preset in self._presets:
+            if str(preset.id) == preset_id:
+                self.sheet_width_input.setValue(preset.settings.sheet_width_mm)
+                self.sheet_height_input.setValue(preset.settings.sheet_height_mm)
+                return
+
+    def _manage_presets(self):
+        from src.ui.widgets.preset_manager import PresetManagerDialog
+
+        current = self.preset_combo.currentData()
+        dialog = PresetManagerDialog(self)
+        dialog.exec()
+        if dialog.changed:
+            self._reload_presets(select_id=current)
 
     def _add_file_row(self, file_path: str):
         row = self.files_table.rowCount()
@@ -176,5 +233,6 @@ class JobDialog(QDialog):
                 "sheet_height_mm": self.sheet_height_input.value() or None,
                 "quantities": quantities,
                 "priority": self.priority_combo.currentText(),
+                "preset_id": self.preset_combo.currentData(),
             },
         }
