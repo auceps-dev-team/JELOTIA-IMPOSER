@@ -4,10 +4,12 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import (
     QComboBox,
+    QDialog,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
+    QListWidget,
     QMessageBox,
     QPushButton,
     QTableWidget,
@@ -24,12 +26,90 @@ _T = ThemeManager
 _COL_NUM, _COL_NAME, _COL_STATUS, _COL_FILES, _COL_SHEETS, _COL_DATE, _COL_ACTIONS = range(7)
 
 
+class ArchivedJobsDialog(QDialog):
+    """Archived jobs: restore one back into the Jobs view (emits `restored`
+    with the JobModel so MainWindow can re-register its state), or delete it
+    for good. The DB stays the source of truth."""
+
+    restored = Signal(object)  # JobModel
+
+    def __init__(self, db, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Jobs archivés")
+        self.resize(560, 420)
+        self.db = db
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(10)
+        self.list_widget = QListWidget()
+        layout.addWidget(self.list_widget, 1)
+
+        actions = QHBoxLayout()
+        self.btn_delete = QPushButton("SUPPR. DÉFINITIVEMENT")
+        self.btn_delete.clicked.connect(self._delete)
+        self.btn_restore = QPushButton("[RESTAURER]")
+        self.btn_restore.setObjectName("primary")
+        self.btn_restore.clicked.connect(self._restore)
+        btn_close = QPushButton("Fermer")
+        btn_close.clicked.connect(self.accept)
+        actions.addWidget(self.btn_delete)
+        actions.addStretch()
+        actions.addWidget(self.btn_restore)
+        actions.addWidget(btn_close)
+        layout.addLayout(actions)
+        self._reload()
+
+    def _reload(self):
+        self.list_widget.clear()
+        self.jobs = [
+            j for j in self.db.get_all_jobs(include_archived=True) if j.archived
+        ]
+        for job in self.jobs:
+            date = job.created_at.strftime("%d/%m/%Y") if job.created_at else "—"
+            self.list_widget.addItem(
+                f"{job.name}  ·  {date}  ·  {len(job.source_paths or [])} fichier(s)"
+                f"  ·  {len(job.sheets)} planche(s)  ·  {job.status}"
+            )
+        has = bool(self.jobs)
+        self.btn_restore.setEnabled(has)
+        self.btn_delete.setEnabled(has)
+        if has:
+            self.list_widget.setCurrentRow(0)
+
+    def _selected(self):
+        row = self.list_widget.currentRow()
+        return self.jobs[row] if 0 <= row < len(self.jobs) else None
+
+    def _restore(self):
+        job = self._selected()
+        if job is None:
+            return
+        if self.db.set_job_archived(job.id, False):
+            self.restored.emit(job)
+            self._reload()
+
+    def _delete(self):
+        job = self._selected()
+        if job is None:
+            return
+        reply = QMessageBox.question(
+            self, "Supprimer",
+            f"Supprimer définitivement « {job.name} » et ses planches ?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.db.delete_job(job.id)
+            self._reload()
+
+
 class JobsWidget(QWidget):
     view_details_requested = Signal(str)   # emits job_name
     cancel_job_requested = Signal(str)
     resume_job_requested = Signal(str)
     delete_job_requested = Signal(str)
     archive_job_requested = Signal(str)
+    archives_requested = Signal()
     job_created = Signal(str, list, dict)  # emits (job_name, file_paths:list[str], overrides:dict)
 
     def __init__(self):
@@ -59,6 +139,9 @@ class JobsWidget(QWidget):
         self.status_filter.addItems(["Tous les statuts", "PENDING", "PROCESSING", "DONE", "ERROR"])
         self.status_filter.currentTextChanged.connect(self._filter_table)
 
+        self.btn_archives = QPushButton("[ARCHIVES…]")
+        self.btn_archives.clicked.connect(self.archives_requested.emit)
+
         self.btn_new_job = QPushButton("[+ NOUVEAU JOB]")
         self.btn_new_job.setObjectName("primary")
         self.btn_new_job.clicked.connect(self.open_new_job_dialog)
@@ -66,6 +149,7 @@ class JobsWidget(QWidget):
         toolbar.addWidget(self.search_input, 1)
         toolbar.addWidget(self.status_filter)
         toolbar.addStretch()
+        toolbar.addWidget(self.btn_archives)
         toolbar.addWidget(self.btn_new_job)
         self.main_layout.addLayout(toolbar)
 

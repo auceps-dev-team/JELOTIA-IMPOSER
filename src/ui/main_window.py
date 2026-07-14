@@ -420,6 +420,7 @@ class MainWindow(QMainWindow):
         self.jobs_view.resume_job_requested.connect(self.handle_resume_job)
         self.jobs_view.delete_job_requested.connect(self.handle_delete_job)
         self.jobs_view.archive_job_requested.connect(self.handle_archive_job)
+        self.jobs_view.archives_requested.connect(self._show_archived_jobs)
         self.jobs_view.job_created.connect(self._on_job_created)
         self.jobs_view.view_details_requested.connect(self.show_preview)
 
@@ -571,42 +572,58 @@ class MainWindow(QMainWindow):
             return
 
         for job in jobs:
-            status = "PENDING" if job.status == "PROCESSING" else job.status
-            self.jobs_view.job_uuid_map[job.id] = job.name
-            self._job_ids[job.name] = uuid.UUID(job.id)
-            self._job_source_paths[job.name] = list(job.source_paths or [])
-
-            try:
-                self._job_settings[job.name] = JobSettings(**(job.settings or {}))
-            except Exception:
-                pass
-
-            self.jobs_view.add_job(job.name, len(job.source_paths or []), status, date_str=job.created_at)
-            self.jobs_view.update_job_status(job.id, status, len(job.sheets))
-
-            if job.sheets:
-                restored_sheets = []
-                for sm in job.sheets:
-                    try:
-                        items = [PlacedItem(**it) for it in (sm.items or [])]
-                        restored_sheets.append(
-                            Sheet(
-                                job_id=uuid.UUID(job.id),
-                                sheet_number=sm.sheet_number,
-                                width_mm=sm.width_mm,
-                                height_mm=sm.height_mm,
-                                fill_rate=sm.fill_rate or 0.0,
-                                items=items,
-                                export_path=Path(sm.export_path) if sm.export_path else None,
-                            )
-                        )
-                    except Exception as e:
-                        self._log(f"Planche non restaurée pour {job.name} : {e}")
-                if restored_sheets:
-                    self._job_sheets[job.name] = restored_sheets
+            self._register_persisted_job(job)
 
         # Populate the dashboard KPIs/chart from the restored job history.
         self._refresh_dashboard()
+
+    def _register_persisted_job(self, job) -> None:
+        """Registers one persisted JobModel into the view and the in-memory
+        caches — used at startup for every non-archived job, and again when a
+        job is restored from the archives."""
+        status = "PENDING" if job.status == "PROCESSING" else job.status
+        self.jobs_view.job_uuid_map[job.id] = job.name
+        self._job_ids[job.name] = uuid.UUID(job.id)
+        self._job_source_paths[job.name] = list(job.source_paths or [])
+
+        try:
+            self._job_settings[job.name] = JobSettings(**(job.settings or {}))
+        except Exception:
+            pass
+
+        self.jobs_view.add_job(
+            job.name, len(job.source_paths or []), status, date_str=job.created_at
+        )
+        self.jobs_view.update_job_status(job.id, status, len(job.sheets))
+
+        if job.sheets:
+            restored_sheets = []
+            for sm in job.sheets:
+                try:
+                    items = [PlacedItem(**it) for it in (sm.items or [])]
+                    restored_sheets.append(
+                        Sheet(
+                            job_id=uuid.UUID(job.id),
+                            sheet_number=sm.sheet_number,
+                            width_mm=sm.width_mm,
+                            height_mm=sm.height_mm,
+                            fill_rate=sm.fill_rate or 0.0,
+                            items=items,
+                            export_path=Path(sm.export_path) if sm.export_path else None,
+                        )
+                    )
+                except Exception as e:
+                    self._log(f"Planche non restaurée pour {job.name} : {e}")
+            if restored_sheets:
+                self._job_sheets[job.name] = restored_sheets
+
+    def _show_archived_jobs(self):
+        from src.ui.widgets.job_queue import ArchivedJobsDialog
+
+        dialog = ArchivedJobsDialog(self.db, self)
+        dialog.restored.connect(self._register_persisted_job)
+        dialog.exec()
+        self._refresh_dashboard()  # deletions in the dialog affect the stats
 
     # ------------------------------------------------------------------ #
     #  Orphan recovery                                                     #
