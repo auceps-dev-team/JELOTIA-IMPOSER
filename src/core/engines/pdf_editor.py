@@ -219,7 +219,11 @@ class PdfEditSession:
         font_size_pt: float = 12.0,
         color: str = "#000000",
         bold: bool = False,
+        bg_color: Optional[str] = None,
     ) -> None:
+        """Stamps text at (x_mm, y_mm). With `bg_color`, an opaque rectangle is
+        painted underneath first — the field technique for retouching scanned
+        pages, where the old value can only be covered, not removed."""
         doc = self._require_doc()
         self._check_index(index)
         if not text.strip():
@@ -227,6 +231,19 @@ class PdfEditSession:
         self._snapshot()
         page = doc[index]
         rgb = _hex_to_rgb01(color)
+        if bg_color:
+            fontname = "hebo" if bold else "helv"
+            width_pt = fitz.get_text_length(text, fontname=fontname, fontsize=font_size_pt)
+            pad = font_size_pt * 0.18
+            rect = fitz.Rect(
+                x_mm * _MM_TO_PT - pad,
+                y_mm * _MM_TO_PT - pad,
+                x_mm * _MM_TO_PT + width_pt + pad,
+                y_mm * _MM_TO_PT + font_size_pt * 1.05 + pad,
+            )
+            if page.rotation:
+                rect = (rect * page.derotation_matrix).normalize()
+            page.draw_rect(rect, color=None, fill=_hex_to_rgb01(bg_color))
         # Coordinates arrive in DISPLAYED space (what the preview shows);
         # insert_text expects the unrotated page space — derotate, and pass
         # rotate= so the glyphs stay upright on a rotated page.
@@ -270,6 +287,25 @@ class PdfEditSession:
     # ------------------------------------------------------------------ #
     #  Text search & replace (redact + reinsert)                           #
     # ------------------------------------------------------------------ #
+
+    def page_text_diagnosis(self, index: int) -> str:
+        """Why (or whether) text search can work on this page:
+        - "has_text": real extractable text exists;
+        - "scanned_image": no text at all, the page is raster imagery (scan /
+          full-page export) — text lives inside the pixels;
+        - "vector_only": no text but vector drawings — text was converted to
+          outlines by the authoring tool;
+        - "empty": nothing detectable."""
+        doc = self._require_doc()
+        self._check_index(index)
+        page = doc[index]
+        if page.get_text().strip():
+            return "has_text"
+        if page.get_images(full=True):
+            return "scanned_image"
+        if page.get_drawings():
+            return "vector_only"
+        return "empty"
 
     def find_text(self, index: int, needle: str) -> List[fitz.Rect]:
         """Occurrence rectangles of `needle` on the page (empty list if none,

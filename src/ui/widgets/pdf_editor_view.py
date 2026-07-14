@@ -85,6 +85,16 @@ class _StampTextDialog(QDialog):
         self.btn_color = QPushButton(self.color.upper())
         self.btn_color.clicked.connect(self._pick_color)
         form.addRow("Couleur :", self.btn_color)
+
+        # Covering background: the way to "replace" text on scanned pages
+        # (mask the old value, write the new one on top).
+        self.bg_color = data.get("bg_color") or "#FFFFFF"
+        self.chk_bg = QCheckBox("Fond couvrant (masque ce qui est dessous)")
+        self.chk_bg.setChecked(bool(data.get("bg_color")))
+        form.addRow("", self.chk_bg)
+        self.btn_bg_color = QPushButton(self.bg_color.upper())
+        self.btn_bg_color.clicked.connect(self._pick_bg_color)
+        form.addRow("Couleur du fond :", self.btn_bg_color)
         layout.addLayout(form)
 
         buttons = QDialogButtonBox(
@@ -100,12 +110,20 @@ class _StampTextDialog(QDialog):
             self.color = color.name()
             self.btn_color.setText(self.color.upper())
 
+    def _pick_bg_color(self):
+        color = QColorDialog.getColor(QColor(self.bg_color), self, "Couleur du fond")
+        if color.isValid():
+            self.bg_color = color.name()
+            self.btn_bg_color.setText(self.bg_color.upper())
+            self.chk_bg.setChecked(True)
+
     def values(self) -> dict:
         return {
             "text": self.text_input.text(),
             "font_size_pt": self.spin_size.value(),
             "bold": self.chk_bold.isChecked(),
             "color": self.color,
+            "bg_color": self.bg_color if self.chk_bg.isChecked() else None,
         }
 
 
@@ -135,6 +153,12 @@ class _TextStampItem(QGraphicsSimpleTextItem):
         self.setFont(font)
         self.setText(data.get("text") or " ")
         self.setBrush(QBrush(QColor(data.get("color", "#000000"))))
+
+    def paint(self, painter, option, widget=None):
+        bg = self.stamp.data.get("bg_color")
+        if bg:
+            painter.fillRect(self.boundingRect().adjusted(-2, -1, 2, 1), QColor(bg))
+        super().paint(painter, option, widget)
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
@@ -390,10 +414,22 @@ class _ReplaceTextDialog(QDialog):
         index = self.editor.current_index
         self.rects = session.find_text(index, needle)
         if not self.rects:
-            self.status.setText(
-                "Aucune occurrence trouvée. NB : si le texte du PDF est vectorisé "
-                "(contours dessinés), il n'est pas remplaçable sans OCR."
-            )
+            diagnosis = session.page_text_diagnosis(index)
+            messages = {
+                "scanned_image": (
+                    "Cette page ne contient AUCUN texte : c'est une image scannée — "
+                    "le texte fait partie des pixels. Solution : fermez, puis posez un "
+                    "tampon [+ TEXTE] avec « Fond couvrant » pour masquer l'ancienne "
+                    "valeur et écrire la nouvelle par-dessus."
+                ),
+                "vector_only": (
+                    "Le texte de cette page est vectorisé (contours dessinés) — non "
+                    "remplaçable sans OCR. Alternative : tampon [+ TEXTE] à fond couvrant."
+                ),
+                "empty": "Page vide — aucun contenu détectable.",
+                "has_text": "Aucune occurrence trouvée dans le texte de cette page.",
+            }
+            self.status.setText(messages.get(diagnosis, messages["has_text"]))
             self.btn_apply.setEnabled(False)
             self.before_label.setText("—")
             self.after_label.setText("—")
@@ -822,6 +858,7 @@ class PdfEditorWidget(QWidget):
                         stamp.page, stamp.x_mm, stamp.y_mm, stamp.data["text"],
                         font_size_pt=stamp.data["font_size_pt"],
                         color=stamp.data["color"], bold=stamp.data["bold"],
+                        bg_color=stamp.data.get("bg_color"),
                     )
                 else:
                     self.session.add_image(

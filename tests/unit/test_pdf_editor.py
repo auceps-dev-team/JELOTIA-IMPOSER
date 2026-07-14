@@ -273,6 +273,69 @@ def test_replace_text_protects_images(tmp_path):
     s.close()
 
 
+def test_add_text_with_covering_background(tmp_path):
+    """On a colored page, a covering-background stamp must mask what's below
+    (the scanned-page retouching technique)."""
+    pdf = tmp_path / "yellow.pdf"
+    doc = fitz.open()
+    page = doc.new_page(width=200, height=200)
+    page.draw_rect(page.rect, color=None, fill=(1.0, 0.8, 0.0))  # yellow page
+    doc.save(str(pdf))
+    doc.close()
+
+    s = PdfEditSession()
+    s.open(pdf)
+    s.add_text(0, x_mm=20, y_mm=20, text="1333207", font_size_pt=12,
+               bg_color="#FFFFFF")
+
+    pix = s.render_page(0, target_width_px=400)
+    zoom = 400 / 200
+    k = 72 / 25.4
+    # Sample inside the covering rect but away from the glyphs' ink.
+    x_px = int((20 * k + 2) * zoom)
+    y_px = int((20 * k + 1) * zoom)
+    r, g, b = pix.pixel(x_px, y_px)
+    assert min(r, g, b) > 220, f"le fond couvrant doit être blanc, obtenu ({r},{g},{b})"
+    assert "1333207" in s.doc[0].get_text()
+    s.close()
+
+
+def test_page_text_diagnosis(price_pdf, tmp_path):
+    s = PdfEditSession()
+    s.open(price_pdf)
+    assert s.page_text_diagnosis(0) == "has_text"
+    s.close()
+
+    # Image-only page (a scan): no text, one raster image.
+    img = tmp_path / "scan.png"
+    Image.new("RGB", (100, 100), "#CCCCCC").save(str(img))
+    scanned = tmp_path / "scan.pdf"
+    doc = fitz.open()
+    page = doc.new_page(width=200, height=200)
+    page.insert_image(page.rect, filename=str(img))
+    doc.save(str(scanned))
+    doc.close()
+    s.open(scanned)
+    assert s.page_text_diagnosis(0) == "scanned_image"
+    s.close()
+
+    # Vector-only page (outlined text case).
+    vector = tmp_path / "vector.pdf"
+    doc = fitz.open()
+    page = doc.new_page(width=200, height=200)
+    page.draw_circle(fitz.Point(100, 100), 40, color=(0, 0, 0), width=2)
+    doc.save(str(vector))
+    doc.close()
+    s.open(vector)
+    assert s.page_text_diagnosis(0) == "vector_only"
+    s.close()
+
+    blank = _make_pdf(tmp_path / "blank.pdf", [""])
+    s.open(blank)
+    assert s.page_text_diagnosis(0) == "empty"
+    s.close()
+
+
 # --------------------------------------------------------------------------- #
 #  Images: list / replace / delete by xref                                     #
 # --------------------------------------------------------------------------- #
