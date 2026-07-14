@@ -56,11 +56,26 @@ class QRGeneratorWidget(QWidget):
         root.addWidget(self._build_preview_panel(), 1)
 
     def _build_form_panel(self) -> QFrame:
-        panel = QFrame()
-        panel.setFixedWidth(380)
-        panel.setStyleSheet(
+        # The panel content grew beyond typical screen heights (style + logo +
+        # templates + batch); without a scroll area, Qt compresses the form
+        # fields into unreadable slivers instead of scrolling.
+        from PySide6.QtWidgets import QScrollArea
+
+        container = QFrame()
+        container.setFixedWidth(380)
+        container.setStyleSheet(
             f"QFrame {{ background-color:{_T.BG_PANEL}; border-right:1px solid {_T.BORDER}; }}"
         )
+        wrap = QVBoxLayout(container)
+        wrap.setContentsMargins(0, 0, 0, 0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        panel = QWidget()
+        panel.setStyleSheet(f"background-color:{_T.BG_PANEL};")
         outer = QVBoxLayout(panel)
         outer.setContentsMargins(22, 20, 22, 20)
         outer.setSpacing(18)
@@ -167,7 +182,9 @@ class QRGeneratorWidget(QWidget):
         outer.addWidget(hint)
 
         outer.addStretch()
-        return panel
+        scroll.setWidget(panel)
+        wrap.addWidget(scroll)
+        return container
 
     def _build_preview_panel(self) -> QWidget:
         wrapper = QWidget()
