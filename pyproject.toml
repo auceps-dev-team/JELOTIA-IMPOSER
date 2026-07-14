@@ -5,9 +5,6 @@ description = "Logiciel Professionnel d'Imposition Automatique Industrielle"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "pyside6>=6.6.0",
-    "pymupdf>=1.24.0",
-    "watchdog>=4.0.0",
     "alembic>=1.14.0",
     "colorama>=0.4.6",
     "colour-science>=0.4.4",
@@ -16,16 +13,15 @@ dependencies = [
     "pikepdf>=9.4.2",
     "pillow>=11.0.0",
     "pydantic>=2.10.4",
-    "pymupdf>=1.25.1",
+    "pymupdf==1.28.0",
     "pyside6>=6.8.1",
+    "pyqtgraph>=0.13.3",
     "qrcode>=8.0",
     "rectpack>=0.2.2",
     "reportlab>=4.2.5",
     "shapely>=2.0.6",
     "sqlalchemy>=2.0.36",
     "watchdog>=6.0.0",
-    "pyqtgraph>=0.13.3",
-    "PyMuPDF>=1.24.0",
     "openpyxl>=3.1.5",
 ]
 
