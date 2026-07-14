@@ -220,6 +220,21 @@ def test_schema_migration_adds_archived_column(tmp_path):
     assert repo.get_all_jobs() == []
 
 
+def test_qr_batch_history_roundtrip(repo):
+    for i in range(3):
+        assert repo.add_qr_batch(
+            source_name=f"clients_{i}.xlsx", template_name="Badge" if i else None,
+            formats="PDF", total=10 + i, succeeded=9 + i, failed=1,
+            cancelled=False, out_dir=f"C:/out/{i}",
+        ) is True
+
+    batches = repo.get_qr_batches(limit=2)
+    assert len(batches) == 2, "limit respectée"
+    assert batches[0].source_name == "clients_2.xlsx", "les plus récents d'abord"
+    assert batches[0].template_name == "Badge"
+    assert batches[0].succeeded == 11
+
+
 def test_get_system_counts(repo):
     a = str(uuid.uuid4())
     repo.create_job_stub(a, "Job A", ["a.pdf"], JobSettings())

@@ -6,7 +6,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker, subqueryload
 
 from src.core.models.domain import FileItem, Job, JobSettings, Sheet
-from src.database.models import Base, FileItemModel, JobModel, SheetModel
+from src.database.models import Base, FileItemModel, JobModel, QRBatchModel, SheetModel
 from src.utils.config import config
 
 
@@ -210,6 +210,53 @@ class DatabaseRepository:
         except SQLAlchemyError as e:
             logger.error(f"Error computing dashboard stats: {e}")
             return empty
+        finally:
+            session.close()
+
+    def add_qr_batch(
+        self,
+        *,
+        source_name: str,
+        template_name: Optional[str],
+        formats: str,
+        total: int,
+        succeeded: int,
+        failed: int,
+        cancelled: bool,
+        out_dir: str,
+    ) -> bool:
+        """Records one QR batch run in the history."""
+        session = self.get_session()
+        try:
+            session.add(
+                QRBatchModel(
+                    source_name=source_name, template_name=template_name,
+                    formats=formats, total=total, succeeded=succeeded,
+                    failed=failed, cancelled=cancelled, out_dir=out_dir,
+                )
+            )
+            session.commit()
+            return True
+        except SQLAlchemyError as e:
+            session.rollback()
+            logger.error(f"Error recording QR batch: {e}")
+            return False
+        finally:
+            session.close()
+
+    def get_qr_batches(self, limit: int = 50) -> List[QRBatchModel]:
+        """Most recent batch runs first."""
+        session = self.get_session()
+        try:
+            batches = (
+                session.query(QRBatchModel)
+                .order_by(QRBatchModel.created_at.desc())
+                .limit(limit)
+                .all()
+            )
+            for batch in batches:
+                session.expunge(batch)
+            return batches
         finally:
             session.close()
 

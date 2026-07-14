@@ -64,6 +64,68 @@ class _BatchWorker(QThread):
         self.done.emit(result)
 
 
+class QRBatchHistoryDialog(QDialog):
+    """Read-only history of batch runs: when, from which file, which template,
+    how many succeeded/failed, and a shortcut to the output folder."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Historique des lots QR")
+        self.resize(640, 420)
+
+        from PySide6.QtWidgets import QListWidget
+
+        from src.database.repository import DatabaseRepository
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(10)
+        self.list_widget = QListWidget()
+        layout.addWidget(self.list_widget, 1)
+
+        actions = QHBoxLayout()
+        self.btn_open = QPushButton("[OUVRIR LE DOSSIER]")
+        self.btn_open.clicked.connect(self._open_folder)
+        btn_close = QPushButton("Fermer")
+        btn_close.clicked.connect(self.accept)
+        actions.addWidget(self.btn_open)
+        actions.addStretch()
+        actions.addWidget(btn_close)
+        layout.addLayout(actions)
+
+        try:
+            self.batches = DatabaseRepository().get_qr_batches(50)
+        except Exception:
+            self.batches = []
+        for batch in self.batches:
+            date = batch.created_at.strftime("%d/%m %H:%M") if batch.created_at else "—"
+            template = batch.template_name or "QR seul"
+            state = " · annulé" if batch.cancelled else ""
+            failed = f" / {batch.failed} échec(s)" if batch.failed else ""
+            self.list_widget.addItem(
+                f"{date}  ·  {batch.source_name or '—'}  ·  {template}  ·  "
+                f"{batch.succeeded} ok{failed}  ·  {batch.formats}{state}"
+            )
+        self.btn_open.setEnabled(bool(self.batches))
+        if self.batches:
+            self.list_widget.setCurrentRow(0)
+
+    def _open_folder(self):
+        import os
+
+        row = self.list_widget.currentRow()
+        if not (0 <= row < len(self.batches)):
+            return
+        out_dir = Path(self.batches[row].out_dir)
+        if out_dir.exists():
+            os.startfile(str(out_dir))
+        else:
+            QMessageBox.information(
+                self, "Dossier introuvable",
+                f"Le dossier n'existe plus :\n{out_dir}",
+            )
+
+
 class QRBatchDialog(QDialog):
     """Import Excel/CSV → map columns → generate one QR per row (in the style
     configured in the F5·QR module), with a background run and ZIP export.
@@ -425,6 +487,13 @@ class QRBatchDialog(QDialog):
             QMessageBox.information(self, "Dossier manquant", "Choisissez un dossier de sortie.")
             return
 
+        # Metadata captured now, recorded in the history once the run ends.
+        self._run_meta = {
+            "source_name": self._import_stem,
+            "template_name": template.name if template is not None else None,
+            "formats": "PDF (modèle)" if template is not None else ",".join(formats),
+        }
+
         self._set_running(True)
         self.progress.setVisible(True)
         self.progress.setRange(0, plan.total)
@@ -449,6 +518,24 @@ class QRBatchDialog(QDialog):
         self.btn_generate.setEnabled(True)
         self.btn_zip.setEnabled(result.succeeded > 0)
         self.btn_impose.setEnabled(result.succeeded > 0)
+
+        # History record (best-effort: a logging failure never blocks the UI).
+        try:
+            from src.database.repository import DatabaseRepository
+
+            meta = getattr(self, "_run_meta", {})
+            DatabaseRepository().add_qr_batch(
+                source_name=meta.get("source_name", ""),
+                template_name=meta.get("template_name"),
+                formats=meta.get("formats", ""),
+                total=result.succeeded + result.failed,
+                succeeded=result.succeeded,
+                failed=result.failed,
+                cancelled=result.cancelled,
+                out_dir=str(result.out_dir),
+            )
+        except Exception:
+            pass
 
         parts = [f"{result.succeeded} généré(s)"]
         if result.failed:

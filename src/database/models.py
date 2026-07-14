@@ -34,6 +34,25 @@ class JobModel(Base):
     sheets = relationship("SheetModel", back_populates="job", cascade="all, delete-orphan")
 
 
+class QRBatchModel(Base):
+    """History of QR batch runs (F4·QR): what was generated, from which file,
+    with which template, and where the output landed — the cahier's
+    ExportHistory, scoped to batches."""
+
+    __tablename__ = "qr_batches"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    source_name = Column(String(255), nullable=False, default="")
+    template_name = Column(String(255), nullable=True)
+    formats = Column(String(100), nullable=False, default="")
+    total = Column(Integer, nullable=False, default=0)
+    succeeded = Column(Integer, nullable=False, default=0)
+    failed = Column(Integer, nullable=False, default=0)
+    cancelled = Column(Boolean, nullable=False, default=False)
+    out_dir = Column(String(1024), nullable=False, default="")
+
+
 class FileItemModel(Base):
     __tablename__ = "file_items"
 

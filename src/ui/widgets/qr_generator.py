@@ -5,6 +5,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QImage, QPixmap
 from PySide6.QtWidgets import (
     QColorDialog,
+    QDialog,
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
@@ -25,6 +26,79 @@ from src.ui.theme import ThemeManager
 
 _T = ThemeManager
 _PREVIEW_PX = 360
+
+
+class ArchivedTemplatesDialog(QDialog):
+    """Archived card templates: restore into the pickers or delete for good."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Modèles archivés")
+        self.resize(480, 360)
+        from src.core.engines.template_composer import TemplateStore
+
+        self.store = TemplateStore()
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(10)
+        from PySide6.QtWidgets import QListWidget
+
+        self.list_widget = QListWidget()
+        layout.addWidget(self.list_widget, 1)
+
+        actions = QHBoxLayout()
+        self.btn_delete = QPushButton("SUPPR. DÉFINITIVEMENT")
+        self.btn_delete.clicked.connect(self._delete)
+        self.btn_restore = QPushButton("[RESTAURER]")
+        self.btn_restore.setObjectName("primary")
+        self.btn_restore.clicked.connect(self._restore)
+        btn_close = QPushButton("Fermer")
+        btn_close.clicked.connect(self.accept)
+        actions.addWidget(self.btn_delete)
+        actions.addStretch()
+        actions.addWidget(self.btn_restore)
+        actions.addWidget(btn_close)
+        layout.addLayout(actions)
+        self._reload()
+
+    def _reload(self):
+        self.list_widget.clear()
+        self.templates = [
+            t for t in self.store.list(include_archived=True) if t.archived
+        ]
+        for tpl in self.templates:
+            self.list_widget.addItem(
+                f"{tpl.name}  ·  {tpl.width_mm:.0f}×{tpl.height_mm:.0f} mm"
+            )
+        has = bool(self.templates)
+        self.btn_restore.setEnabled(has)
+        self.btn_delete.setEnabled(has)
+        if has:
+            self.list_widget.setCurrentRow(0)
+
+    def _selected(self):
+        row = self.list_widget.currentRow()
+        return self.templates[row] if 0 <= row < len(self.templates) else None
+
+    def _restore(self):
+        tpl = self._selected()
+        if tpl is not None:
+            self.store.set_archived(tpl.id, False)
+            self._reload()
+
+    def _delete(self):
+        tpl = self._selected()
+        if tpl is None:
+            return
+        reply = QMessageBox.question(
+            self, "Supprimer",
+            f"Supprimer définitivement « {tpl.name} » ?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.store.delete(tpl.id)
+            self._reload()
 
 
 class QRGeneratorWidget(QWidget):
@@ -155,7 +229,10 @@ class QRGeneratorWidget(QWidget):
         self.btn_tpl_archive.clicked.connect(self._archive_template)
         self.btn_tpl_delete = QPushButton("SUPPR.")
         self.btn_tpl_delete.clicked.connect(self._delete_template)
-        for b in (self.btn_tpl_edit, self.btn_tpl_archive, self.btn_tpl_delete):
+        self.btn_tpl_archives = QPushButton("ARCHIVES…")
+        self.btn_tpl_archives.clicked.connect(self._show_archived_templates)
+        for b in (self.btn_tpl_edit, self.btn_tpl_archive, self.btn_tpl_delete,
+                  self.btn_tpl_archives):
             tpl_actions.addWidget(b)
         outer.addLayout(tpl_actions)
 
@@ -176,6 +253,9 @@ class QRGeneratorWidget(QWidget):
         self.btn_batch = QPushButton("[GÉNÉRATION PAR LOT…]")
         self.btn_batch.clicked.connect(self._open_batch_dialog)
         outer.addWidget(self.btn_batch)
+        self.btn_history = QPushButton("HISTORIQUE DES LOTS…")
+        self.btn_history.clicked.connect(self._open_history)
+        outer.addWidget(self.btn_history)
         hint = QLabel("Import Excel/CSV — un QR par ligne, avec le style ci-dessus.")
         hint.setWordWrap(True)
         hint.setStyleSheet(f"color:{_T.TEXT_MUTE}; font-size:11px; border:none;")
@@ -384,6 +464,11 @@ class QRGeneratorWidget(QWidget):
         dialog.imposition_requested.connect(self.imposition_job_requested)
         dialog.exec()
 
+    def _open_history(self):
+        from src.ui.widgets.qr_batch_dialog import QRBatchHistoryDialog
+
+        QRBatchHistoryDialog(self).exec()
+
     def _open_designer(self, template_id=None):
         from src.ui.widgets.qr_template_designer import TemplateDesignerDialog
 
@@ -449,6 +534,10 @@ class QRGeneratorWidget(QWidget):
         from src.core.engines.template_composer import TemplateStore
 
         TemplateStore().delete(tpl.id)
+        self._reload_templates()
+
+    def _show_archived_templates(self):
+        ArchivedTemplatesDialog(self).exec()
         self._reload_templates()
 
     # ------------------------------------------------------------------ #
