@@ -1,4 +1,5 @@
 import asyncio
+import itertools
 import logging
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
@@ -40,7 +41,13 @@ class WorkerPoolManager:
 
         self.max_workers = max_workers
         self.executor = ProcessPoolExecutor(max_workers=self.max_workers)
-        self.queue: asyncio.Queue = asyncio.Queue()
+        # Priority queue entries: (priority_rank, seq, payload). Lower rank =
+        # more urgent; `seq` keeps FIFO order among equal priorities (and
+        # avoids comparing payloads). See _dispatcher_loop for why a priority
+        # queue alone would be useless without the semaphore.
+        self.queue: asyncio.PriorityQueue = asyncio.PriorityQueue()
+        self._seq = itertools.count()
+        self._slots: Optional[asyncio.Semaphore] = None
         self.finalize_queue: asyncio.Queue = asyncio.Queue()
         self.is_running = False
         self._dispatcher_task = None
@@ -76,12 +83,18 @@ class WorkerPoolManager:
         file_paths: List[Path],
         settings: JobSettings,
         quantities: Optional[Dict[str, int]] = None,
+        priority: int = 2,
     ):
         """
         Submits a chunk of files (import/preflight/correction) to the queue.
+
+        `priority`: 0 = Urgente, 1 = Haute, 2 = Normale — urgent chunks jump
+        ahead of anything still waiting for a worker slot.
         """
-        await self.queue.put((job_id, file_paths, settings, quantities))
-        logger.debug(f"Job {job_id} queued. Queue size: {self.queue.qsize()}")
+        await self.queue.put(
+            (priority, next(self._seq), (job_id, file_paths, settings, quantities))
+        )
+        logger.debug(f"Job {job_id} queued (prio {priority}). Queue size: {self.queue.qsize()}")
 
     async def submit_finalize_job(
         self, job_id: UUID, file_items: List[FileItem], settings: JobSettings, job_name: Optional[str] = None
@@ -95,21 +108,25 @@ class WorkerPoolManager:
 
     async def _dispatcher_loop(self):
         """
-        Continuously pulls chunks from the queue and dispatches them to the ProcessPool.
+        Continuously pulls chunks from the queue and dispatches them to the
+        ProcessPool. Dispatch is gated by a semaphore sized to max_workers:
+        without it, every entry would be handed to the (FIFO) executor the
+        instant it arrives and the priority queue would never hold anything —
+        priorities only matter if waiting work stays in OUR queue, where it
+        can be reordered, until a worker slot actually frees up.
         """
         loop = asyncio.get_event_loop()
+        self._slots = asyncio.Semaphore(self.max_workers)
         while self.is_running:
             try:
-                # Wait for the next job in the queue
-                job_id, file_paths, settings, quantities = await self.queue.get()
+                _priority, _seq, payload = await self.queue.get()
+                job_id, file_paths, settings, quantities = payload
 
+                await self._slots.acquire()
                 logger.info(f"Dispatching Job {job_id} to worker pool...")
-
-                # We do not `await` the executor directly here because we want to
-                # dispatch multiple jobs up to the worker limit concurrently.
-                # Instead, we create a task that awaits the executor.
-                asyncio.create_task(self._execute_job(loop, job_id, file_paths, settings, quantities))
-
+                asyncio.create_task(
+                    self._execute_job(loop, job_id, file_paths, settings, quantities)
+                )
                 self.queue.task_done()
             except asyncio.CancelledError:
                 break
@@ -143,6 +160,9 @@ class WorkerPoolManager:
             logger.error(f"Job {job_id} failed in worker: {e}")
             if self.on_job_completed:
                 self.on_job_completed(job_id, [], e)
+        finally:
+            if self._slots is not None:
+                self._slots.release()
 
     async def _finalize_dispatcher_loop(self):
         """

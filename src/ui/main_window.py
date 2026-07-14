@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMenu,
+    QMessageBox,
     QPushButton,
     QSizePolicy,
     QStackedWidget,
@@ -138,12 +139,16 @@ class MainWindow(QMainWindow):
             generate_thumbnail=True,
         )
 
+    # Priority labels (JobDialog) -> queue rank (WorkerPoolManager).
+    _PRIORITY_RANKS = {"Urgente": 0, "Haute": 1, "Normale": 2}
+
     def _submit_job(
         self,
         job_name: str,
         file_paths: list[str],
         overrides: dict = None,
         reuse_job_id: uuid.UUID = None,
+        settings_override: JobSettings = None,
     ) -> str:
         """Submit a job to the worker pool.
 
@@ -175,12 +180,19 @@ class MainWindow(QMainWindow):
 
         overrides = overrides or {}
         paths = [Path(f) for f in file_paths if Path(f).exists()]
-        settings = self._build_job_settings()
+        # settings_override (job duplication) reuses the ORIGINAL job's
+        # settings instead of whatever the global config says today.
+        settings = settings_override or self._build_job_settings()
         if overrides.get("sheet_width_mm"):
             settings.sheet_width_mm = overrides["sheet_width_mm"]
         if overrides.get("sheet_height_mm"):
             settings.sheet_height_mm = overrides["sheet_height_mm"]
         self._job_settings[job_name] = settings
+
+        priority_label = overrides.get("priority") or "Normale"
+        priority = self._PRIORITY_RANKS.get(priority_label, 2)
+        if priority < 2:
+            self._log(f"Job {job_name} soumis en priorité {priority_label.upper()}")
         # Normalize the per-file quantity keys to str(Path(...)): the dialog
         # keys them by the raw path string (forward slashes, as Qt returns),
         # but process_job_files looks them up by str(Path(file_path)) — which
@@ -212,7 +224,7 @@ class MainWindow(QMainWindow):
         }
 
         for chunk in chunks:
-            self.worker_thread.submit_job(job_id, chunk, settings, quantities)
+            self.worker_thread.submit_job(job_id, chunk, settings, quantities, priority=priority)
         return job_id_str
 
     def handle_job_started(self, job_id: str):
@@ -420,6 +432,7 @@ class MainWindow(QMainWindow):
         self.jobs_view.resume_job_requested.connect(self.handle_resume_job)
         self.jobs_view.delete_job_requested.connect(self.handle_delete_job)
         self.jobs_view.archive_job_requested.connect(self.handle_archive_job)
+        self.jobs_view.duplicate_job_requested.connect(self.handle_duplicate_job)
         self.jobs_view.archives_requested.connect(self._show_archived_jobs)
         self.jobs_view.job_created.connect(self._on_job_created)
         self.jobs_view.view_details_requested.connect(self.show_preview)
@@ -622,8 +635,50 @@ class MainWindow(QMainWindow):
 
         dialog = ArchivedJobsDialog(self.db, self)
         dialog.restored.connect(self._register_persisted_job)
+        dialog.duplicated.connect(self._duplicate_from_model)
         dialog.exec()
         self._refresh_dashboard()  # deletions in the dialog affect the stats
+
+    # ------------------------------------------------------------------ #
+    #  Job duplication                                                     #
+    # ------------------------------------------------------------------ #
+
+    def _launch_duplicate(self, base_name: str, source_paths: list, settings) -> None:
+        """Shared duplication path: new unique name, new job_id, same source
+        files and (where possible) the original job's settings."""
+        existing = [p for p in source_paths if Path(p).exists()]
+        if not existing:
+            QMessageBox.warning(
+                self, "Duplication impossible",
+                f"Aucun des fichiers sources de « {base_name} » n'existe encore "
+                "sur le disque.",
+            )
+            return
+        missing = len(source_paths) - len(existing)
+
+        new_name = f"{base_name} (copie)"
+        counter = 2
+        while self.jobs_view._find_row_by_name(new_name) != -1 or new_name in self._job_ids:
+            new_name = f"{base_name} (copie {counter})"
+            counter += 1
+
+        self.jobs_view.add_job(new_name, len(existing), "PENDING")
+        note = f" — {missing} fichier(s) source(s) introuvable(s) ignoré(s)" if missing else ""
+        self._log(f"Job dupliqué : {base_name} → {new_name}{note}")
+        self._submit_job(new_name, existing, settings_override=settings)
+
+    def handle_duplicate_job(self, job_name: str):
+        """DUPL. button on a Jobs row."""
+        source_paths = self._job_source_paths.get(job_name) or []
+        self._launch_duplicate(job_name, source_paths, self._job_settings.get(job_name))
+
+    def _duplicate_from_model(self, job) -> None:
+        """DUPLIQUER from the archives dialog (JobModel from the DB)."""
+        try:
+            settings = JobSettings(**(job.settings or {}))
+        except Exception:
+            settings = None
+        self._launch_duplicate(job.name, list(job.source_paths or []), settings)
 
     # ------------------------------------------------------------------ #
     #  Orphan recovery                                                     #

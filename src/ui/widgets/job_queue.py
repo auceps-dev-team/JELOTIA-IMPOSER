@@ -31,7 +31,8 @@ class ArchivedJobsDialog(QDialog):
     with the JobModel so MainWindow can re-register its state), or delete it
     for good. The DB stays the source of truth."""
 
-    restored = Signal(object)  # JobModel
+    restored = Signal(object)   # JobModel
+    duplicated = Signal(object)  # JobModel — relaunch as a brand-new job
 
     def __init__(self, db, parent=None):
         super().__init__(parent)
@@ -48,6 +49,8 @@ class ArchivedJobsDialog(QDialog):
         actions = QHBoxLayout()
         self.btn_delete = QPushButton("SUPPR. DÉFINITIVEMENT")
         self.btn_delete.clicked.connect(self._delete)
+        self.btn_duplicate = QPushButton("DUPLIQUER EN NOUVEAU JOB")
+        self.btn_duplicate.clicked.connect(self._duplicate)
         self.btn_restore = QPushButton("[RESTAURER]")
         self.btn_restore.setObjectName("primary")
         self.btn_restore.clicked.connect(self._restore)
@@ -55,6 +58,7 @@ class ArchivedJobsDialog(QDialog):
         btn_close.clicked.connect(self.accept)
         actions.addWidget(self.btn_delete)
         actions.addStretch()
+        actions.addWidget(self.btn_duplicate)
         actions.addWidget(self.btn_restore)
         actions.addWidget(btn_close)
         layout.addLayout(actions)
@@ -89,6 +93,11 @@ class ArchivedJobsDialog(QDialog):
             self.restored.emit(job)
             self._reload()
 
+    def _duplicate(self):
+        job = self._selected()
+        if job is not None:
+            self.duplicated.emit(job)
+
     def _delete(self):
         job = self._selected()
         if job is None:
@@ -109,6 +118,7 @@ class JobsWidget(QWidget):
     resume_job_requested = Signal(str)
     delete_job_requested = Signal(str)
     archive_job_requested = Signal(str)
+    duplicate_job_requested = Signal(str)
     archives_requested = Signal()
     job_created = Signal(str, list, dict)  # emits (job_name, file_paths:list[str], overrides:dict)
 
@@ -259,12 +269,15 @@ class JobsWidget(QWidget):
         btn_details = make("DÉTAILS", _T.ACCENT_TEXT, "Voir les planches du job")
         btn_relaunch = make("RELANCER", _T.STATE_OK,
                             "Relancer un job échoué ou bloqué en attente")
+        btn_duplicate = make("DUPL.", _T.TEXT_2,
+                             "Dupliquer en nouveau job (mêmes fichiers et réglages)")
         btn_archive = make("ARCH.", _T.TEXT_MUTE,
                            "Archiver : retire le job de la vue en le conservant en base")
         btn_delete = make("SUPPR.", _T.STATE_ERR, "Supprimer définitivement le job")
 
         btn_details.clicked.connect(lambda: self.view_details_requested.emit(name))
         btn_relaunch.clicked.connect(lambda: self._relaunch_job(name))
+        btn_duplicate.clicked.connect(lambda: self.duplicate_job_requested.emit(name))
         btn_archive.clicked.connect(lambda: self.archive_job_requested.emit(name))
         btn_delete.clicked.connect(lambda: self._confirm_delete(name))
         return cell

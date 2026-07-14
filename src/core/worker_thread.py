@@ -60,18 +60,22 @@ class WorkerPoolThread(QThread):
         file_paths: List[Path],
         settings: JobSettings,
         quantities: Optional[Dict[str, int]] = None,
+        priority: int = 2,
     ):
         """Thread-safe submission of one chunk from the main UI thread.
 
         `quantities` (path string -> quantity) lets the caller override a
         specific file's FileItem.quantity, e.g. to print several copies of
         one file on the sheet — see job_processor.process_job_files.
+        `priority`: 0 = Urgente, 1 = Haute, 2 = Normale (see WorkerPoolManager).
         """
         self.ready_event.wait()
         if self.pool_manager is None or self.loop is None:
             return
         asyncio.run_coroutine_threadsafe(
-            self.pool_manager.submit_job(job_id, file_paths, settings, quantities),
+            self.pool_manager.submit_job(
+                job_id, file_paths, settings, quantities, priority=priority
+            ),
             self.loop
         )
         self.job_started.emit(str(job_id))

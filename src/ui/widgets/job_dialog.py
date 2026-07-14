@@ -175,5 +175,6 @@ class JobDialog(QDialog):
                 "sheet_width_mm": self.sheet_width_input.value() or None,
                 "sheet_height_mm": self.sheet_height_input.value() or None,
                 "quantities": quantities,
+                "priority": self.priority_combo.currentText(),
             },
         }
