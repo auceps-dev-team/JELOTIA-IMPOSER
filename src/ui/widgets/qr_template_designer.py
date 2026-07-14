@@ -146,6 +146,7 @@ class TemplateDesignerDialog(QDialog):
         sample_data: str = "https://jelotia.com/exemple",
         parent=None,
         store: Optional[TemplateStore] = None,
+        initial_template_id=None,
     ):
         super().__init__(parent)
         self.setWindowTitle("Modèles — zone de travail")
@@ -162,8 +163,11 @@ class TemplateDesignerDialog(QDialog):
         self._loading = False
 
         self.setup_ui()
-        self._refresh_template_combo()
-        self._rebuild_scene()
+        self._refresh_template_combo(select_id=initial_template_id)
+        if initial_template_id is not None:
+            self._on_template_selected()
+        else:
+            self._rebuild_scene()
 
     # ------------------------------------------------------------------ #
     #  Layout                                                              #

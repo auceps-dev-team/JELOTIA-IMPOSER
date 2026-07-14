@@ -1,7 +1,8 @@
 from pathlib import Path
 from typing import List, Optional
 
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -155,6 +156,23 @@ class QRBatchDialog(QDialog):
         out_row.addWidget(self.btn_out)
         out_row.addWidget(self.out_label, 1)
         layout.addLayout(out_row)
+
+        # Preview of the first row, exactly as it will be produced (composed
+        # card if a template is selected, bare QR otherwise) — checked BEFORE
+        # generating thousands of files or imposing the batch.
+        layout.addWidget(self._title("4 · APERÇU"))
+        preview_row = QHBoxLayout()
+        self.preview_label = QLabel("Importez un fichier puis cliquez APERÇU.")
+        self.preview_label.setFixedHeight(150)
+        self.preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.preview_label.setStyleSheet(
+            f"background-color:#FFFFFF; color:{_T.TEXT_DIM}; border:1px solid {_T.BORDER};"
+        )
+        self.btn_preview = QPushButton("[APERÇU]")
+        self.btn_preview.clicked.connect(self._update_item_preview)
+        preview_row.addWidget(self.preview_label, 1)
+        preview_row.addWidget(self.btn_preview, 0, Qt.AlignmentFlag.AlignTop)
+        layout.addLayout(preview_row)
 
         # Summary + progress
         layout.addStretch()
@@ -328,6 +346,53 @@ class QRBatchDialog(QDialog):
             f"{len(self.rows)} ligne(s) → {plan.total} QR à générer  ·  "
             f"{plan.duplicates_skipped} doublon(s)  ·  {plan.empty_skipped} vide(s)"
         )
+
+    def _update_item_preview(self):
+        """Renders the FIRST planned item with the current settings/template,
+        so the operator validates the output before a mass run or imposition."""
+        plan = self._current_plan()
+        if plan is None or not plan.items:
+            self.preview_label.setText("Rien à prévisualiser (importez et mappez le lien).")
+            return
+        item = plan.items[0]
+        template = self._current_template()
+        try:
+            if template is not None:
+                import tempfile
+
+                import fitz
+
+                from src.core.engines.template_composer import TemplateComposer
+
+                with tempfile.TemporaryDirectory() as tmp:
+                    pdf = TemplateComposer().compose(
+                        template, item.data, self.settings,
+                        Path(tmp) / "preview.pdf", row=item.row,
+                    )
+                    doc = fitz.open(str(pdf))
+                    zoom = 420 / max(1.0, doc[0].rect.width)
+                    pix = doc[0].get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
+                    image = QImage(
+                        pix.samples, pix.width, pix.height, pix.stride,
+                        QImage.Format.Format_RGB888,
+                    ).copy()
+                    doc.close()
+            else:
+                img = self.engine.generate_image(item.data, self.settings).convert("RGB")
+                image = QImage(
+                    img.tobytes("raw", "RGB"), img.width, img.height,
+                    img.width * 3, QImage.Format.Format_RGB888,
+                ).copy()
+        except Exception as e:
+            self.preview_label.setText(f"Aperçu impossible : {e}")
+            return
+
+        pixmap = QPixmap.fromImage(image).scaled(
+            self.preview_label.width() - 8, self.preview_label.height() - 8,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        self.preview_label.setPixmap(pixmap)
 
     def _pick_out_dir(self):
         start = str(self.out_dir) if self.out_dir else ""

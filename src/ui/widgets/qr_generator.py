@@ -125,7 +125,26 @@ class QRGeneratorWidget(QWidget):
 
         # --- Modèles ---------------------------------------------------- #
         outer.addWidget(self._section_title("MODÈLES"))
-        self.btn_designer = QPushButton("[ZONE DE TRAVAIL — MODÈLES…]")
+        from PySide6.QtWidgets import QListWidget
+
+        self.template_list = QListWidget()
+        self.template_list.setFixedHeight(96)
+        self.template_list.itemDoubleClicked.connect(lambda _: self._edit_template())
+        outer.addWidget(self.template_list)
+
+        tpl_actions = QHBoxLayout()
+        tpl_actions.setSpacing(6)
+        self.btn_tpl_edit = QPushButton("MODIFIER")
+        self.btn_tpl_edit.clicked.connect(self._edit_template)
+        self.btn_tpl_archive = QPushButton("ARCHIVER")
+        self.btn_tpl_archive.clicked.connect(self._archive_template)
+        self.btn_tpl_delete = QPushButton("SUPPR.")
+        self.btn_tpl_delete.clicked.connect(self._delete_template)
+        for b in (self.btn_tpl_edit, self.btn_tpl_archive, self.btn_tpl_delete):
+            tpl_actions.addWidget(b)
+        outer.addLayout(tpl_actions)
+
+        self.btn_designer = QPushButton("[+ NOUVEAU MODÈLE…]")
         self.btn_designer.clicked.connect(self._open_designer)
         outer.addWidget(self.btn_designer)
         designer_hint = QLabel(
@@ -135,6 +154,7 @@ class QRGeneratorWidget(QWidget):
         designer_hint.setWordWrap(True)
         designer_hint.setStyleSheet(f"color:{_T.TEXT_MUTE}; font-size:11px; border:none;")
         outer.addWidget(designer_hint)
+        self._reload_templates()
 
         # --- Lot ------------------------------------------------------ #
         outer.addWidget(self._section_title("LOT"))
@@ -347,11 +367,72 @@ class QRGeneratorWidget(QWidget):
         dialog.imposition_requested.connect(self.imposition_job_requested)
         dialog.exec()
 
-    def _open_designer(self):
+    def _open_designer(self, template_id=None):
         from src.ui.widgets.qr_template_designer import TemplateDesignerDialog
 
         sample = self.url_input.text().strip() or "https://jelotia.com/exemple"
-        TemplateDesignerDialog(self._current_settings(), sample_data=sample, parent=self).exec()
+        TemplateDesignerDialog(
+            self._current_settings(), sample_data=sample, parent=self,
+            initial_template_id=template_id,
+        ).exec()
+        self._reload_templates()
+
+    def _reload_templates(self):
+        """Repopulates the saved-templates list (archived ones excluded)."""
+        from src.core.engines.template_composer import TemplateStore
+
+        self.template_list.clear()
+        try:
+            self._templates = TemplateStore().list()
+        except Exception:
+            self._templates = []
+        for tpl in self._templates:
+            self.template_list.addItem(
+                f"{tpl.name}  ·  {tpl.width_mm:.0f}×{tpl.height_mm:.0f} mm"
+            )
+        has = bool(self._templates)
+        for b in (self.btn_tpl_edit, self.btn_tpl_archive, self.btn_tpl_delete):
+            b.setEnabled(has)
+        if has:
+            self.template_list.setCurrentRow(0)
+
+    def _selected_template(self):
+        row = self.template_list.currentRow()
+        return self._templates[row] if 0 <= row < len(self._templates) else None
+
+    def _edit_template(self):
+        tpl = self._selected_template()
+        if tpl is not None:
+            self._open_designer(template_id=str(tpl.id))
+
+    def _archive_template(self):
+        tpl = self._selected_template()
+        if tpl is None:
+            return
+        from src.core.engines.template_composer import TemplateStore
+
+        try:
+            TemplateStore().set_archived(tpl.id, True)
+        except Exception as e:
+            QMessageBox.warning(self, "Erreur", f"Archivage impossible : {e}")
+            return
+        self._reload_templates()
+
+    def _delete_template(self):
+        tpl = self._selected_template()
+        if tpl is None:
+            return
+        reply = QMessageBox.question(
+            self, "Supprimer le modèle",
+            f"Supprimer définitivement « {tpl.name} » ?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        from src.core.engines.template_composer import TemplateStore
+
+        TemplateStore().delete(tpl.id)
+        self._reload_templates()
 
     # ------------------------------------------------------------------ #
     #  Export                                                              #

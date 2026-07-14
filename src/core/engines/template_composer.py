@@ -170,7 +170,7 @@ class TemplateStore:
         raw = self._json_path(template_id).read_text(encoding="utf-8")
         return CardTemplate.model_validate_json(raw)
 
-    def list(self) -> List[CardTemplate]:
+    def list(self, include_archived: bool = False) -> List[CardTemplate]:
         templates: List[CardTemplate] = []
         for path in sorted(self.directory.glob("*.json")):
             try:
@@ -179,7 +179,15 @@ class TemplateStore:
                 )
             except Exception as e:
                 logger.warning(f"Modèle illisible ({path.name}): {e}")
+        if not include_archived:
+            templates = [t for t in templates if not t.archived]
         return sorted(templates, key=lambda t: t.name.lower())
+
+    def set_archived(self, template_id, archived: bool) -> None:
+        """Hides (or restores) a template from pickers, keeping it on disk."""
+        template = self.load(template_id)
+        template.archived = archived
+        self.save(template)
 
     def delete(self, template_id) -> None:
         self._json_path(template_id).unlink(missing_ok=True)

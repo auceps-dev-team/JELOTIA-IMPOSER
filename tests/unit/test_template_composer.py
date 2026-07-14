@@ -120,6 +120,20 @@ def test_store_roundtrip_and_base_copy(tmp_path, base_pdf, card):
     assert not saved.base_pdf.exists()
 
 
+def test_store_archive_hides_template(tmp_path, card):
+    store = TemplateStore(tmp_path / "Templates")
+    store.save(card)
+    assert len(store.list()) == 1
+
+    store.set_archived(card.id, True)
+    assert store.list() == [], "un modèle archivé disparaît des sélecteurs"
+    archived = store.list(include_archived=True)
+    assert len(archived) == 1 and archived[0].archived is True
+
+    store.set_archived(card.id, False)
+    assert len(store.list()) == 1, "désarchiver le fait réapparaître"
+
+
 def test_standard_formats_present():
     labels = " ".join(STANDARD_FORMATS)
     for expected in ("A4", "A5", "A6", "A7", "Carte de visite", "Vignette"):

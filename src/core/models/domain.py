@@ -180,6 +180,8 @@ class CardTemplate(BaseModel):
     base_pdf: Optional[Path] = None
     qr_zone: TemplateQRZone = Field(default_factory=TemplateQRZone)
     texts: List[TemplateTextZone] = Field(default_factory=list)
+    # Archived templates are hidden from pickers but kept on disk for reuse.
+    archived: bool = False
 
 
 class JobStats(BaseModel):
