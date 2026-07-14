@@ -48,6 +48,9 @@ class DashboardWidget(QWidget):
 
     def _build_header(self) -> QHBoxLayout:
         header = QHBoxLayout()
+        self.btn_report = QPushButton("[RAPPORT PRODUCTION…]")
+        self.btn_report.clicked.connect(self._open_report)
+        header.addWidget(self.btn_report)
         header.addStretch()
         header.addWidget(QLabel("HOT.FOLDER"))
         self._hf_led = LedDot(_T.STATE_ERR, size=8)
@@ -195,6 +198,12 @@ class DashboardWidget(QWidget):
             label.setWordWrap(True)
             label.setStyleSheet(f"color:{_T.TEXT_2}; font-size:11px; border:none;")
             self._journal_layout.addWidget(label)
+
+    def _open_report(self):
+        from src.database.repository import DatabaseRepository
+        from src.ui.widgets.production_report import ProductionReportDialog
+
+        ProductionReportDialog(DatabaseRepository(), self).exec()
 
     def toggle_hotfolder(self, checked):
         if checked:
