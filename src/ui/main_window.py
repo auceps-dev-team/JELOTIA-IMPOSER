@@ -2,7 +2,7 @@ import sys
 import uuid
 from pathlib import Path
 
-from PySide6.QtGui import QGuiApplication, QIcon
+from PySide6.QtGui import QGuiApplication, QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -371,27 +371,30 @@ class MainWindow(QMainWindow):
         self.btn_dashboard = QPushButton("F1·DASHBOARD")
         self.btn_jobs = QPushButton("F2·JOBS")
         self.btn_planches = QPushButton("F3·PLANCHES")
-        self.btn_settings = QPushButton("F4·CONFIG")
-        self.btn_qr = QPushButton("F5·QR")
-        self.btn_pdf = QPushButton("F6·PDF")
+        self.btn_qr = QPushButton("F4·QR")
+        self.btn_pdf = QPushButton("F5·PDF")
+        self.btn_settings = QPushButton("F6·CONFIG")
+        self.btn_sysinfo = QPushButton("F7·INFO SYSTÈME")
+        # Order = stacked-widget indices (see setup_stacked_widget) = Fn keys.
         self._nav_buttons = (
             self.btn_dashboard, self.btn_jobs, self.btn_planches,
-            self.btn_settings, self.btn_qr, self.btn_pdf,
+            self.btn_qr, self.btn_pdf, self.btn_settings, self.btn_sysinfo,
         )
 
-        for btn in self._nav_buttons:
+        for index, btn in enumerate(self._nav_buttons):
             btn.setCheckable(True)
             btn.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
             layout.addWidget(btn)
+            btn.clicked.connect(
+                lambda checked=False, i=index, b=btn: self.switch_view(i, b)
+            )
+            # The labels promise F1..F7 — honor them as real shortcuts.
+            shortcut = QShortcut(QKeySequence(f"F{index + 1}"), self)
+            shortcut.activated.connect(
+                lambda i=index, b=btn: self.switch_view(i, b)
+            )
         layout.addStretch()
         self.main_layout.addWidget(self.topnav)
-
-        self.btn_dashboard.clicked.connect(lambda: self.switch_view(0, self.btn_dashboard))
-        self.btn_jobs.clicked.connect(lambda: self.switch_view(1, self.btn_jobs))
-        self.btn_planches.clicked.connect(lambda: self.switch_view(2, self.btn_planches))
-        self.btn_settings.clicked.connect(lambda: self.switch_view(3, self.btn_settings))
-        self.btn_qr.clicked.connect(lambda: self.switch_view(4, self.btn_qr))
-        self.btn_pdf.clicked.connect(lambda: self.switch_view(5, self.btn_pdf))
 
         self._set_active_nav(self.btn_dashboard)
 
@@ -432,14 +435,18 @@ class MainWindow(QMainWindow):
         from src.ui.widgets.pdf_editor_view import PdfEditorWidget
         self.pdf_view = PdfEditorWidget()
 
-        # Indices must match the switch_view() calls in setup_topnav:
-        # 0 dashboard, 1 jobs, 2 planches, 3 config, 4 QR, 5 PDF.
+        from src.ui.widgets.system_info import SystemInfoWidget
+        self.sysinfo_view = SystemInfoWidget(self.db)
+
+        # Indices must match _nav_buttons order in setup_topnav (= Fn keys):
+        # 0 dashboard, 1 jobs, 2 planches, 3 QR, 4 PDF, 5 config, 6 info.
         self.stacked_widget.addWidget(self.dashboard_view)
         self.stacked_widget.addWidget(self.jobs_view)
         self.stacked_widget.addWidget(self.preview_view)
-        self.stacked_widget.addWidget(self.settings_view)
         self.stacked_widget.addWidget(self.qr_view)
         self.stacked_widget.addWidget(self.pdf_view)
+        self.stacked_widget.addWidget(self.settings_view)
+        self.stacked_widget.addWidget(self.sysinfo_view)
 
     def _on_job_created(self, job_name: str, file_paths: list, overrides: dict):
         """Called when a manual job is created in the dialog."""

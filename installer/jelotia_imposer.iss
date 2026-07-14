@@ -3,7 +3,7 @@
 ; Usage : ouvrir dans Inno Setup Compiler et cliquer "Compile"
 
 #define AppName      "Jelotia Imposer"
-#define AppVersion   "1.20.0"
+#define AppVersion   "1.21.0"
 #define AppPublisher "Jelotia"
 #define AppURL       "https://www.jelotia.com"
 #define AppExeName   "JelotiaImposer.exe"

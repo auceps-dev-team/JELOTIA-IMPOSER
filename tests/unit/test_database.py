@@ -220,6 +220,20 @@ def test_schema_migration_adds_archived_column(tmp_path):
     assert repo.get_all_jobs() == []
 
 
+def test_get_system_counts(repo):
+    a = str(uuid.uuid4())
+    repo.create_job_stub(a, "Job A", ["a.pdf"], JobSettings())
+    repo.update_job_sheets(a, [Sheet(job_id=uuid.UUID(a), sheet_number=1)])
+    b = str(uuid.uuid4())
+    repo.create_job_stub(b, "Job B", ["b.pdf"], JobSettings())
+    repo.set_job_archived(b, True)
+
+    counts = repo.get_system_counts()
+    assert counts["jobs"] == 2  # archivés inclus dans le total
+    assert counts["jobs_archived"] == 1
+    assert counts["sheets"] == 1
+
+
 def test_get_dashboard_stats_aggregates_from_db(repo):
     """The dashboard reads live counts from the DB (no more hand-nudged label
     counters): active = PENDING+PROCESSING jobs, preflight_errors = files in

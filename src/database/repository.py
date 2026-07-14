@@ -213,6 +213,30 @@ class DatabaseRepository:
         finally:
             session.close()
 
+    def get_system_counts(self) -> Dict[str, int]:
+        """Lightweight totals for the system-info screen (SQL COUNTs only)."""
+        session = self.get_session()
+        try:
+            jobs = session.query(func.count(JobModel.id)).scalar() or 0
+            archived = (
+                session.query(func.count(JobModel.id))
+                .filter(JobModel.archived.is_(True))
+                .scalar()
+            ) or 0
+            files = session.query(func.count(FileItemModel.id)).scalar() or 0
+            sheets = session.query(func.count(SheetModel.id)).scalar() or 0
+            return {
+                "jobs": int(jobs),
+                "jobs_archived": int(archived),
+                "files": int(files),
+                "sheets": int(sheets),
+            }
+        except SQLAlchemyError as e:
+            logger.error(f"Error computing system counts: {e}")
+            return {"jobs": 0, "jobs_archived": 0, "files": 0, "sheets": 0}
+        finally:
+            session.close()
+
     def delete_job(self, job_id: str) -> bool:
         """Permanently removes a job and its files/sheets rows."""
         session = self.get_session()
