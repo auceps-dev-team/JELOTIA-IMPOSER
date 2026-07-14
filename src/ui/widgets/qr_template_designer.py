@@ -29,10 +29,12 @@ from PySide6.QtWidgets import (
 )
 
 from src.core.engines.qr_engine import QREngine
+from src.core.engines.qr_import import TableImportError, read_table
 from src.core.engines.template_composer import (
     STANDARD_FORMATS,
     TemplateComposer,
     TemplateStore,
+    substitute_placeholders,
 )
 from src.core.models.domain import (
     CardTemplate,
@@ -121,7 +123,11 @@ class _MovableTextItem(QGraphicsSimpleTextItem):
         font.setPixelSize(max(1, round(self.zone.font_size_pt)))
         font.setBold(self.zone.bold)
         self.setFont(font)
-        self.setText(self.zone.text or " ")
+        # The zone keeps the raw template ({Colonne}); the canvas previews it
+        # with the sample row's real values when one has been loaded.
+        raw = self.zone.text or " "
+        sample = getattr(self._designer, "sample_row", None)
+        self.setText(substitute_placeholders(raw, sample) if sample else raw)
         self.setBrush(QBrush(QColor(self.zone.color)))
 
     def itemChange(self, change, value):
@@ -161,6 +167,8 @@ class TemplateDesignerDialog(QDialog):
         self.qr_item: Optional[_MovableQRItem] = None
         self.text_items: list[_MovableTextItem] = []
         self._loading = False
+        self.columns: list[str] = []
+        self.sample_row: dict = {}
 
         self.setup_ui()
         self._refresh_template_combo(select_id=initial_template_id)
@@ -187,12 +195,24 @@ class TemplateDesignerDialog(QDialog):
         root.addWidget(self.view, 1)
         self.scene.selectionChanged.connect(self._on_selection_changed)
 
-        # Properties panel
-        panel = QFrame()
-        panel.setFixedWidth(340)
-        panel.setStyleSheet(
+        # Properties panel — scrollable so its growing content can never be
+        # vertically crushed on short/scaled screens.
+        from PySide6.QtWidgets import QScrollArea
+
+        container = QFrame()
+        container.setFixedWidth(340)
+        container.setStyleSheet(
             f"QFrame {{ background-color:{_T.BG_PANEL}; border-left:1px solid {_T.BORDER}; }}"
         )
+        wrap = QVBoxLayout(container)
+        wrap.setContentsMargins(0, 0, 0, 0)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        panel = QWidget()
+        panel.setStyleSheet(f"background-color:{_T.BG_PANEL};")
         side = QVBoxLayout(panel)
         side.setContentsMargins(18, 16, 18, 16)
         side.setSpacing(12)
@@ -281,11 +301,27 @@ class TemplateDesignerDialog(QDialog):
         side.addWidget(self.text_props)
         self.text_props.setVisible(False)
 
-        hint = QLabel("Astuce : {Colonne} dans un texte sera remplacé par la "
-                      "valeur de la colonne importée (lot).")
-        hint.setWordWrap(True)
-        hint.setStyleSheet(f"color:{_T.TEXT_MUTE}; font-size:11px; border:none;")
-        side.addWidget(hint)
+        # -- Variables (colonnes Excel/CSV) -------------------------------- #
+        side.addWidget(self._title("VARIABLES"))
+        vars_row = QHBoxLayout()
+        self.btn_load_columns = QPushButton("Colonnes Excel/CSV…")
+        self.btn_load_columns.clicked.connect(self._load_columns)
+        vars_row.addWidget(self.btn_load_columns)
+        self.combo_vars = QComboBox()
+        self.combo_vars.setEnabled(False)
+        vars_row.addWidget(self.combo_vars, 1)
+        side.addLayout(vars_row)
+        self.btn_insert_var = QPushButton("[+ INSÉRER LA VARIABLE]")
+        self.btn_insert_var.setEnabled(False)
+        self.btn_insert_var.clicked.connect(self._insert_variable)
+        side.addWidget(self.btn_insert_var)
+        self.vars_hint = QLabel(
+            "Chargez votre fichier : chaque {Colonne} insérée sera remplacée par "
+            "la valeur de la ligne (ID, nom, téléphone…) lors de la génération du lot."
+        )
+        self.vars_hint.setWordWrap(True)
+        self.vars_hint.setStyleSheet(f"color:{_T.TEXT_MUTE}; font-size:11px; border:none;")
+        side.addWidget(self.vars_hint)
 
         side.addStretch()
 
@@ -301,7 +337,9 @@ class TemplateDesignerDialog(QDialog):
         self.btn_save.clicked.connect(self._save_template)
         side.addWidget(self.btn_save)
 
-        root.addWidget(panel)
+        scroll.setWidget(panel)
+        wrap.addWidget(scroll)
+        root.addWidget(container)
 
     def _title(self, text: str) -> QLabel:
         lbl = QLabel(f"┌─[ {text} ]──")
@@ -564,6 +602,60 @@ class TemplateDesignerDialog(QDialog):
             item.zone.color = color.name()
             self.btn_text_color.setText(color.name().upper())
             item.refresh()
+
+    def _load_columns(self):
+        """Loads the batch file's headers (and its first row as sample values)
+        so text zones can be built from real columns and previewed with real
+        data — dynamic IDs, names, phone numbers…"""
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Colonnes depuis un fichier", "",
+            "Tableurs (*.xlsx *.xlsm *.csv *.tsv);;Tous (*.*)",
+        )
+        if not path:
+            return
+        try:
+            headers, rows = read_table(Path(path))
+        except TableImportError as e:
+            QMessageBox.warning(self, "Import impossible", str(e))
+            return
+        if not headers:
+            QMessageBox.warning(self, "Fichier vide", "Aucune colonne détectée.")
+            return
+        self.columns = headers
+        self.sample_row = rows[0] if rows else {}
+        self.combo_vars.clear()
+        self.combo_vars.addItems(headers)
+        self.combo_vars.setEnabled(True)
+        self.btn_insert_var.setEnabled(True)
+        self.vars_hint.setText(
+            f"{len(headers)} colonne(s) chargée(s) — l'aperçu montre les valeurs "
+            f"de la première ligne ({Path(path).name})."
+        )
+        for item in self.text_items:
+            item.refresh()
+
+    def _insert_variable(self):
+        """Appends {Colonne} to the selected text zone, or creates a new text
+        zone carrying just the variable when none is selected."""
+        column = self.combo_vars.currentText()
+        if not column:
+            return
+        placeholder = "{" + column + "}"
+        item = self._selected_text_item()
+        if item is None:
+            zone = TemplateTextZone(text=placeholder, x_mm=5.0, y_mm=5.0)
+            self.template.texts.append(zone)
+            new_item = _MovableTextItem(zone, self)
+            self.scene.addItem(new_item)
+            self.text_items.append(new_item)
+            self.scene.clearSelection()
+            new_item.setSelected(True)
+            return
+        item.zone.text = (item.zone.text or "") + placeholder
+        self._loading = True
+        self.text_input.setText(item.zone.text)
+        self._loading = False
+        item.refresh()
 
     def _delete_selected_text(self):
         item = self._selected_text_item()
