@@ -151,8 +151,11 @@ class QRGeneratorWidget(QWidget):
         panel = QWidget()
         panel.setStyleSheet(f"background-color:{_T.BG_PANEL};")
         outer = QVBoxLayout(panel)
-        outer.setContentsMargins(22, 20, 22, 20)
-        outer.setSpacing(18)
+        # Tight margins: the scroll bar already eats ~12px INSIDE the fixed
+        # 380px container — wide margins would push the content past the
+        # viewport and clip it on the right.
+        outer.setContentsMargins(14, 16, 14, 16)
+        outer.setSpacing(14)
 
         # --- Contenu -------------------------------------------------- #
         outer.addWidget(self._section_title("CONTENU"))
@@ -221,8 +224,8 @@ class QRGeneratorWidget(QWidget):
         self.template_list.itemDoubleClicked.connect(lambda _: self._edit_template())
         outer.addWidget(self.template_list)
 
-        tpl_actions = QHBoxLayout()
-        tpl_actions.setSpacing(6)
+        # Four actions on TWO rows: side by side they need ~420px, more than
+        # the scrollable panel's viewport can ever offer.
         self.btn_tpl_edit = QPushButton("MODIFIER")
         self.btn_tpl_edit.clicked.connect(self._edit_template)
         self.btn_tpl_archive = QPushButton("ARCHIVER")
@@ -231,10 +234,13 @@ class QRGeneratorWidget(QWidget):
         self.btn_tpl_delete.clicked.connect(self._delete_template)
         self.btn_tpl_archives = QPushButton("ARCHIVES…")
         self.btn_tpl_archives.clicked.connect(self._show_archived_templates)
-        for b in (self.btn_tpl_edit, self.btn_tpl_archive, self.btn_tpl_delete,
-                  self.btn_tpl_archives):
-            tpl_actions.addWidget(b)
-        outer.addLayout(tpl_actions)
+        for pair in ((self.btn_tpl_edit, self.btn_tpl_archive),
+                     (self.btn_tpl_delete, self.btn_tpl_archives)):
+            row = QHBoxLayout()
+            row.setSpacing(6)
+            for b in pair:
+                row.addWidget(b)
+            outer.addLayout(row)
 
         self.btn_designer = QPushButton("[+ NOUVEAU MODÈLE…]")
         self.btn_designer.clicked.connect(self._open_designer)
