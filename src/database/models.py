@@ -26,6 +26,10 @@ class JobModel(Base):
     # job can actually be resumed (re-run through the whole pipeline) rather
     # than just having its status reset with nothing to re-process.
     source_paths = Column(JSON, nullable=False, default=list)
+    # Per-file copy counts {path: qty} as submitted. Persisted because every
+    # re-submission path (resume, duplicate, gang) rebuilds the job from these
+    # rows — without them a "50 copies" order silently restarts at 1.
+    quantities = Column(JSON, nullable=False, default=dict)
     # Archived jobs are hidden from the Jobs view but kept in the DB (and
     # still count in dashboard/production history) for potential reuse.
     archived = Column(Boolean, nullable=False, default=False)

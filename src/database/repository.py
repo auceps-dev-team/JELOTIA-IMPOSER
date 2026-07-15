@@ -27,15 +27,20 @@ class DatabaseRepository:
         """create_all only creates missing TABLES — it never adds new columns
         to existing ones. Field databases predate `jobs.archived`, so add it
         in place if absent (SQLite ALTER TABLE ADD COLUMN is cheap and safe)."""
+        added = (
+            ("archived", "BOOLEAN NOT NULL DEFAULT 0"),
+            ("quantities", "JSON NOT NULL DEFAULT '{}'"),
+        )
         try:
             with self.engine.connect() as conn:
                 cols = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(jobs)")]
-                if cols and "archived" not in cols:
-                    conn.exec_driver_sql(
-                        "ALTER TABLE jobs ADD COLUMN archived BOOLEAN NOT NULL DEFAULT 0"
-                    )
-                    conn.commit()
-                    logger.info("Schema migrated: jobs.archived column added")
+                if not cols:
+                    return
+                for name, ddl in added:
+                    if name not in cols:
+                        conn.exec_driver_sql(f"ALTER TABLE jobs ADD COLUMN {name} {ddl}")
+                        conn.commit()
+                        logger.info(f"Schema migrated: jobs.{name} column added")
         except SQLAlchemyError as e:
             logger.error(f"Schema migration failed: {e}")
 
@@ -43,7 +48,12 @@ class DatabaseRepository:
         return self.SessionLocal()
 
     def create_job_stub(
-        self, job_id: str, name: str, source_paths: List[str], settings: JobSettings
+        self,
+        job_id: str,
+        name: str,
+        source_paths: List[str],
+        settings: JobSettings,
+        quantities: Optional[Dict[str, int]] = None,
     ) -> bool:
         """Persists a job the moment it's submitted — before any files have
         been processed yet — so it survives a crash/restart and (if it later
@@ -62,6 +72,7 @@ class DatabaseRepository:
                 existing.status = "PENDING"
                 existing.settings = settings.model_dump()
                 existing.source_paths = list(source_paths)
+                existing.quantities = dict(quantities or {})
                 session.query(FileItemModel).filter(FileItemModel.job_id == job_id).delete()
                 session.query(SheetModel).filter(SheetModel.job_id == job_id).delete()
             else:
@@ -73,6 +84,7 @@ class DatabaseRepository:
                         settings=settings.model_dump(),
                         stats={},
                         source_paths=list(source_paths),
+                        quantities=dict(quantities or {}),
                     )
                 )
             session.commit()

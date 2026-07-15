@@ -171,6 +171,55 @@ def test_get_all_jobs_returns_every_job(repo):
     assert {j.name for j in all_jobs} == {"Job A", "Job B"}
 
 
+def test_create_job_stub_persists_quantities(repo):
+    """Every re-submission path (resume, duplicate, gang) rebuilds the job
+    from this row — losing the quantities would silently reprint 1 copy."""
+    job_id = str(uuid.uuid4())
+    quantities = {"C:/in/badge.pdf": 50, "C:/in/carte.pdf": 12}
+    repo.create_job_stub(job_id, "Commande", list(quantities), JobSettings(),
+                         quantities=quantities)
+
+    db_job = repo.get_job(job_id)
+    assert db_job.quantities == quantities
+
+    # Resume upserts the same row: quantities must survive.
+    repo.create_job_stub(job_id, "Commande", list(quantities), JobSettings(),
+                         quantities=quantities)
+    assert repo.get_job(job_id).quantities == quantities
+
+
+def test_create_job_stub_without_quantities_defaults_to_empty(repo):
+    job_id = str(uuid.uuid4())
+    repo.create_job_stub(job_id, "Sans qty", ["a.pdf"], JobSettings())
+    assert repo.get_job(job_id).quantities == {}
+
+
+def test_schema_migration_adds_quantities_column(tmp_path):
+    """Field DBs predate jobs.quantities — it must be added in place."""
+    import sqlite3
+
+    db_file = tmp_path / "old2.db"
+    con = sqlite3.connect(str(db_file))
+    con.execute(
+        "CREATE TABLE jobs (id VARCHAR(36) PRIMARY KEY, name VARCHAR(255) NOT NULL, "
+        "status VARCHAR(50) NOT NULL, created_at DATETIME, settings JSON NOT NULL, "
+        "stats JSON NOT NULL, source_paths JSON NOT NULL)"
+    )
+    con.execute(
+        "INSERT INTO jobs (id, name, status, settings, stats, source_paths) "
+        "VALUES ('j1', 'Ancien', 'DONE', '{}', '{}', '[]')"
+    )
+    con.commit()
+    con.close()
+
+    repo = DatabaseRepository(str(db_file))
+    job = repo.get_job("j1")
+    assert job is not None and job.quantities == {}
+    assert repo.create_job_stub("j2", "Neuf", ["a.pdf"], JobSettings(),
+                                quantities={"a.pdf": 7}) is True
+    assert repo.get_job("j2").quantities == {"a.pdf": 7}
+
+
 def test_delete_job_removes_row_and_children(repo):
     job_id = str(uuid.uuid4())
     repo.create_job_stub(job_id, "À supprimer", ["a.pdf"], JobSettings())

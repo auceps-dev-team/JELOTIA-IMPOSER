@@ -71,6 +71,9 @@ class MainWindow(QMainWindow):
         # Stores job_name → its canonical job_id, so resuming reuses the same
         # id (and DB row / table row) instead of creating a duplicate job.
         self._job_ids: dict[str, uuid.UUID] = {}
+        # Stores job_name → {path: quantity}, so every re-submission (resume,
+        # duplicate, gang) reprints the ordered number of copies.
+        self._job_quantities: dict[str, dict] = {}
 
         self.db = DatabaseRepository()
 
@@ -229,7 +232,10 @@ class MainWindow(QMainWindow):
 
         source_path_strs = [str(p) for p in paths]
         self._job_source_paths[job_name] = source_path_strs
-        self.db.create_job_stub(job_id_str, job_name, source_path_strs, settings)
+        self._job_quantities[job_name] = dict(quantities)
+        self.db.create_job_stub(
+            job_id_str, job_name, source_path_strs, settings, quantities=quantities
+        )
 
         self._job_group_state[job_name] = {
             "job_id": job_id,
@@ -452,6 +458,7 @@ class MainWindow(QMainWindow):
         self.jobs_view.archive_job_requested.connect(self.handle_archive_job)
         self.jobs_view.duplicate_job_requested.connect(self.handle_duplicate_job)
         self.jobs_view.archives_requested.connect(self._show_archived_jobs)
+        self.jobs_view.gang_requested.connect(self._show_gang_dialog)
         self.jobs_view.job_created.connect(self._on_job_created)
         self.jobs_view.view_details_requested.connect(self.show_preview)
 
@@ -616,6 +623,7 @@ class MainWindow(QMainWindow):
         self.jobs_view.job_uuid_map[job.id] = job.name
         self._job_ids[job.name] = uuid.UUID(job.id)
         self._job_source_paths[job.name] = list(job.source_paths or [])
+        self._job_quantities[job.name] = dict(getattr(job, "quantities", None) or {})
 
         try:
             self._job_settings[job.name] = JobSettings(**(job.settings or {}))
@@ -658,12 +666,70 @@ class MainWindow(QMainWindow):
         self._refresh_dashboard()  # deletions in the dialog affect the stats
 
     # ------------------------------------------------------------------ #
+    #  Ganging (multi-job amalgame)                                        #
+    # ------------------------------------------------------------------ #
+
+    def _show_gang_dialog(self):
+        """Offers to gang the PENDING orders that share production settings."""
+        from src.core.ganging import find_gang_groups
+        from src.ui.widgets.job_queue import GangDialog
+
+        candidates = []
+        for name in self.jobs_view.names_with_status("PENDING"):
+            settings = self._job_settings.get(name)
+            paths = self._job_source_paths.get(name) or []
+            if settings is None:
+                continue
+            candidates.append((name, settings, paths, self._job_quantities.get(name) or {}))
+
+        dialog = GangDialog(find_gang_groups(candidates), self)
+        dialog.gang_requested.connect(self._create_gang)
+        dialog.exec()
+
+    def _create_gang(self, group) -> None:
+        """Turns a compatible group into ONE job: all files, quantities summed,
+        a single nesting pass (that's where the media saving comes from). The
+        source orders are archived — kept for history, out of the way."""
+        from src.core.ganging import gang_job_name
+
+        paths = [p for p in group.merged_paths() if Path(p).exists()]
+        if not paths:
+            QMessageBox.warning(
+                self, "Amalgame impossible",
+                "Aucun fichier source de ces commandes n'existe encore sur le disque.",
+            )
+            return
+        quantities = {p: q for p, q in group.merged_quantities().items() if p in set(paths)}
+
+        gang_name = gang_job_name(group)
+        members = [m.name for m in group.members]
+        self.jobs_view.add_job(gang_name, len(paths), "PENDING")
+        self._log(
+            f"Amalgame : {len(members)} commande(s) → {gang_name} "
+            f"({sum(quantities.values())} exemplaire(s))"
+        )
+        self._submit_job(
+            gang_name, paths,
+            overrides={"quantities": quantities},
+            settings_override=group.settings.model_copy(),
+        )
+
+        # Archive the source orders: they are produced by the gang now.
+        for name in members:
+            job_id = self._job_ids.get(name)
+            if job_id is not None and self.db.set_job_archived(str(job_id), True):
+                self._forget_job(name)
+        self._refresh_dashboard()
+
+    # ------------------------------------------------------------------ #
     #  Job duplication                                                     #
     # ------------------------------------------------------------------ #
 
-    def _launch_duplicate(self, base_name: str, source_paths: list, settings) -> None:
+    def _launch_duplicate(
+        self, base_name: str, source_paths: list, settings, quantities: dict = None
+    ) -> None:
         """Shared duplication path: new unique name, new job_id, same source
-        files and (where possible) the original job's settings."""
+        files, quantities and (where possible) the original job's settings."""
         existing = [p for p in source_paths if Path(p).exists()]
         if not existing:
             QMessageBox.warning(
@@ -683,12 +749,19 @@ class MainWindow(QMainWindow):
         self.jobs_view.add_job(new_name, len(existing), "PENDING")
         note = f" — {missing} fichier(s) source(s) introuvable(s) ignoré(s)" if missing else ""
         self._log(f"Job dupliqué : {base_name} → {new_name}{note}")
-        self._submit_job(new_name, existing, settings_override=settings)
+        self._submit_job(
+            new_name, existing,
+            overrides={"quantities": dict(quantities or {})},
+            settings_override=settings,
+        )
 
     def handle_duplicate_job(self, job_name: str):
         """DUPL. button on a Jobs row."""
         source_paths = self._job_source_paths.get(job_name) or []
-        self._launch_duplicate(job_name, source_paths, self._job_settings.get(job_name))
+        self._launch_duplicate(
+            job_name, source_paths, self._job_settings.get(job_name),
+            quantities=self._job_quantities.get(job_name),
+        )
 
     def _duplicate_from_model(self, job) -> None:
         """DUPLIQUER from the archives dialog (JobModel from the DB)."""
@@ -696,7 +769,10 @@ class MainWindow(QMainWindow):
             settings = JobSettings(**(job.settings or {}))
         except Exception:
             settings = None
-        self._launch_duplicate(job.name, list(job.source_paths or []), settings)
+        self._launch_duplicate(
+            job.name, list(job.source_paths or []), settings,
+            quantities=dict(job.quantities or {}),
+        )
 
     # ------------------------------------------------------------------ #
     #  Orphan recovery                                                     #
@@ -726,7 +802,7 @@ class MainWindow(QMainWindow):
         if job_id is not None:
             self.jobs_view.job_uuid_map.pop(str(job_id), None)
         for cache in (self._job_sheets, self._job_settings, self._job_source_paths,
-                      self._job_group_state):
+                      self._job_quantities, self._job_group_state):
             cache.pop(job_name, None)
 
     def handle_delete_job(self, job_name: str):
@@ -765,7 +841,14 @@ class MainWindow(QMainWindow):
 
         self._log(f"Job repris: {job_name}")
         self.notifier.notify("Job Repris", job_name, False)
-        self._submit_job(job_name, source_paths, reuse_job_id=self._job_ids.get(job_name))
+        # Carry the original quantities over: without them the resumed job
+        # would silently reprint 1 copy of each file instead of the order.
+        self._submit_job(
+            job_name, source_paths,
+            overrides={"quantities": self._job_quantities.get(job_name) or {}},
+            reuse_job_id=self._job_ids.get(job_name),
+            settings_override=self._job_settings.get(job_name),
+        )
 
     # ------------------------------------------------------------------ #
     #  Cleanup                                                             #
