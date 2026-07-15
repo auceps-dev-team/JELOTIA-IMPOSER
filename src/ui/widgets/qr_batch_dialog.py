@@ -494,6 +494,17 @@ class QRBatchDialog(QDialog):
             "formats": "PDF (modèle)" if template is not None else ",".join(formats),
         }
 
+        # Each run gets its own dated subfolder: the output directory is shared
+        # by default, so successive batches used to pile up (and overwrite each
+        # other) in it — making the ZIP and the history's "open folder"
+        # ambiguous. One run = one self-contained deliverable.
+        import datetime
+
+        from src.core.engines.qr_engine import safe_filename
+
+        stem = safe_filename(self._import_stem) or "lot"
+        run_dir = self.out_dir / f"{stem}_{datetime.datetime.now():%Y%m%d_%H%M%S}"
+
         self._set_running(True)
         self.progress.setVisible(True)
         self.progress.setRange(0, plan.total)
@@ -501,7 +512,7 @@ class QRBatchDialog(QDialog):
         self.status_label.setText("Génération en cours…")
 
         self.worker = _BatchWorker(
-            self.engine, plan.items, self.settings, self.out_dir, formats,
+            self.engine, plan.items, self.settings, run_dir, formats,
             template=template, parent=self,
         )
         self.worker.progress.connect(self._on_progress)
@@ -580,7 +591,7 @@ class QRBatchDialog(QDialog):
         if not path:
             return
         try:
-            zip_outputs(self.result.out_dir, Path(path))
+            zip_outputs(self.result, Path(path))
         except OSError as e:
             QMessageBox.warning(self, "Erreur", f"Échec de l'export ZIP : {e}")
             return

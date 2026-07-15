@@ -12,7 +12,7 @@ from src.core.engines.qr_batch import (
 )
 from src.core.engines.qr_engine import QREngine
 from src.core.engines.qr_import import TableImportError, read_table
-from src.core.models.domain import QRCodeSettings
+from src.core.models.domain import QRCodeSettings, QRItem
 
 # --------------------------------------------------------------------------- #
 #  Import (Excel / CSV)                                                        #
@@ -257,9 +257,47 @@ def test_zip_outputs(tmp_path):
         [{"Lien": "https://jelotia.com/a", "Nom": "carte_a"}],
         ColumnMapping(url_col="Lien", filename_col="Nom"),
     )
-    generate_batch(QREngine(), plan.items, QRCodeSettings(), out, ["PNG", "PDF"])
+    result = generate_batch(QREngine(), plan.items, QRCodeSettings(), out, ["PNG", "PDF"])
 
-    zip_path = zip_outputs(out, tmp_path / "lot.zip")
+    zip_path = zip_outputs(result, tmp_path / "lot.zip")
     assert zip_path.exists()
     with zipfile.ZipFile(zip_path) as zf:
         assert set(zf.namelist()) == {"carte_a.png", "carte_a.pdf"}
+
+
+def test_zip_outputs_ignores_files_from_previous_batches(tmp_path):
+    """Retour terrain : le dossier de sortie par défaut est partagé et
+    accumulait les lots précédents ; le ZIP les embarquait tous, noyant les
+    QR fraîchement générés. Seuls les fichiers de CE lot doivent partir."""
+    out = tmp_path / "out"
+    out.mkdir()
+    stale = out / "ANCIENNE AGENCE IMMOBILIER.pdf"
+    stale.write_bytes(b"vieux lot")
+    (out / "vieux_qr.png").write_bytes(b"vieux lot")
+
+    plan = build_plan(
+        [{"Lien": "https://jelotia.com/neuf", "Nom": "nouveau"}],
+        ColumnMapping(url_col="Lien", filename_col="Nom"),
+    )
+    result = generate_batch(QREngine(), plan.items, QRCodeSettings(), out, ["PDF"])
+
+    zip_path = zip_outputs(result, tmp_path / "lot.zip")
+    with zipfile.ZipFile(zip_path) as zf:
+        assert set(zf.namelist()) == {"nouveau.pdf"}, (
+            "le ZIP ne doit contenir que le lot courant"
+        )
+    assert stale.exists(), "les anciens fichiers restent sur le disque, intacts"
+
+
+def test_zip_outputs_skips_failed_items(tmp_path):
+    """Un élément en échec n'a produit aucun fichier : rien à archiver."""
+    items = [
+        QRItem(data="https://jelotia.com/ok", filename="ok"),
+        QRItem(data="   ", filename="vide"),  # échoue à la génération
+    ]
+    result = generate_batch(QREngine(), items, QRCodeSettings(), tmp_path / "out", ["PDF"])
+    assert result.succeeded == 1 and result.failed == 1
+
+    zip_path = zip_outputs(result, tmp_path / "lot.zip")
+    with zipfile.ZipFile(zip_path) as zf:
+        assert zf.namelist() == ["ok.pdf"]

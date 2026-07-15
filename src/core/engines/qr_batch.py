@@ -193,13 +193,22 @@ def imposition_payload(result: BatchResult) -> tuple:
     return paths, quantities
 
 
-def zip_outputs(src_dir: Path, zip_path: Path) -> Path:
-    """Zips every generated file directly under src_dir into zip_path."""
-    src_dir = Path(src_dir)
+def zip_outputs(result: BatchResult, zip_path: Path) -> Path:
+    """Zips exactly the files THIS run produced.
+
+    It used to zip everything sitting in the output directory, which silently
+    swept in every earlier batch left in that folder (a shared default) — the
+    operator got an archive of stale QR codes with the new ones buried inside.
+    The result knows precisely what it wrote: that is the only truth used here.
+    """
     zip_path = Path(zip_path)
     zip_path.parent.mkdir(parents=True, exist_ok=True)
+    produced = sorted(
+        {path for item in result.results if item.ok for path in item.paths.values()}
+    )
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for entry in sorted(src_dir.iterdir()):
-            if entry.is_file() and entry.resolve() != zip_path.resolve():
-                zf.write(str(entry), entry.name)
+        for path in produced:
+            path = Path(path)
+            if path.is_file() and path.resolve() != zip_path.resolve():
+                zf.write(str(path), path.name)
     return zip_path
