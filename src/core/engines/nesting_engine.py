@@ -135,6 +135,7 @@ class RectpackNestingStrategy(NestingStrategy):
                     width_mm=actual_w,
                     height_mm=actual_h,
                     rotated=is_rotated,
+                    bleed_mm=file_item.bleed_mm,
                 )
                 sheet.items.append(placed_item)
                 placed_area += actual_w * actual_h
@@ -317,6 +318,7 @@ class ShelfNestingStrategy(NestingStrategy):
                     width_mm=w,
                     height_mm=h,
                     rotated=rotated,
+                    bleed_mm=r["item"].bleed_mm,
                 )
             )
             best_shelf["used_width"] = x + w

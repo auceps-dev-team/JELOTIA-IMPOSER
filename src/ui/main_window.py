@@ -136,6 +136,7 @@ class MainWindow(QMainWindow):
             gap_mm=float(config.get("imposition", "spacing") or 3.0),
             margin_mm=float(config.get("imposition", "margin") or 0.0),
             allow_rotation=bool(config.get("imposition", "rotation_allowed")),
+            add_bleed_mm=float(config.get("imposition", "add_bleed") or 0.0),
             min_dpi=int(config.get("preflight", "min_dpi") or 300),
             export_format=export_format,
             export_dpi=int(config.get("export", "dpi") or 300),

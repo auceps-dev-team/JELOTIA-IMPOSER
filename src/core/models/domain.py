@@ -100,16 +100,22 @@ class FileItem(BaseModel):
     job_id: UUID
     path: Path
     format: FileFormat
+    # Dimensions INCLUDE the bleed when bleed_mm > 0 (the artwork really is
+    # that big); the finished size is width_mm - 2*bleed_mm.
     width_mm: float
     height_mm: float
     dpi: int
     color_mode: ColorMode
     quantity: int = 1
+    bleed_mm: float = 0.0
     preflight_status: PreflightStatus = PreflightStatus.PENDING
     preflight_errors: List[PreflightError] = Field(default_factory=list)
 
 
 class PlacedItem(BaseModel):
+    """A pose on a sheet. x/y/width/height cover the artwork AS PRINTED —
+    bleed included. Cutting happens at the finished size: the same rectangle
+    inset by bleed_mm on every side (see trim_rect_mm)."""
     file_item_id: UUID
     source_path: Path
     x_mm: float
@@ -117,6 +123,13 @@ class PlacedItem(BaseModel):
     width_mm: float
     height_mm: float
     rotated: bool = False
+    bleed_mm: float = 0.0
+
+    def trim_rect_mm(self) -> tuple:
+        """(x, y, width, height) of the finished size — where the blade goes."""
+        b = self.bleed_mm
+        return (self.x_mm + b, self.y_mm + b,
+                max(0.0, self.width_mm - 2 * b), max(0.0, self.height_mm - 2 * b))
 
 
 class Sheet(BaseModel):

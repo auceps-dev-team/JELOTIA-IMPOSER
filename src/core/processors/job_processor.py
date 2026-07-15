@@ -69,6 +69,38 @@ def _persist_sheet_sources(sheets: List[Sheet], job_temp_dir: Path, job_id: UUID
             item.source_path = dest
 
 
+def _apply_bleed(item: FileItem, settings: JobSettings, work_dir: Path) -> None:
+    """Gives `item` the configured bleed, in place.
+
+    Two cases, and the difference matters for the sizes:
+    - the file already carries enough bleed (real BleedBox): its measured
+      dimensions ALREADY include it — only record how much;
+    - otherwise a bleed-extended copy is produced and the item grows by
+      2*bleed, so the nesting reserves the printed size.
+    """
+    if settings.add_bleed_mm <= 0:
+        return
+    from src.core.engines.bleed_engine import BleedError, available_bleed_mm, ensure_bleed
+
+    try:
+        existing = available_bleed_mm(item.path)
+        new_path, applied = ensure_bleed(
+            item.path, settings.add_bleed_mm, work_dir, name_hint=str(item.id)
+        )
+    except (BleedError, OSError) as e:
+        logger.warning(f"Fond perdu impossible pour {item.path}: {e}")
+        return
+
+    if applied <= 0:
+        item.bleed_mm = min(existing, settings.add_bleed_mm)
+        return
+
+    item.path = new_path
+    item.width_mm += 2 * applied
+    item.height_mm += 2 * applied
+    item.bleed_mm = applied
+
+
 def process_job_files(
     job_id: UUID,
     file_paths: List[Path],
@@ -153,6 +185,11 @@ def process_job_files(
                         logger.error(f"Correction failed for {item.path}: {ce}")
                         # If correction fails, we might mark it as ERROR or keep it WARNING depending on severity
                         # For now, let's keep it as is, or we could add an error.
+
+                # 4. Bleed: extend the artwork past the trim line so a slightly
+                # drifting blade never exposes white. Done after correction so
+                # the corrected file is the one extended.
+                _apply_bleed(item, settings, job_temp_dir)
 
                 processed_items.append(item)
         except Exception as e:

@@ -110,10 +110,14 @@ class LayoutEngine:
         crop_off = 2 * mm
 
         for item in sheet.items:
-            x = item.x_mm * mm
-            y = item.y_mm * mm
-            w = item.width_mm * mm
-            h = item.height_mm * mm
+            # Marks go on the TRIM rectangle (the finished size), never on the
+            # bleed edge — cutting at the bleed would leave the extended
+            # artwork on the product and the whole point of bleed is lost.
+            trim_x, trim_y, trim_w, trim_h = item.trim_rect_mm()
+            x = trim_x * mm
+            y = trim_y * mm
+            w = trim_w * mm
+            h = trim_h * mm
 
             if settings.draw_cutlines:
                 c.setStrokeColorRGB(1, 0, 0)
@@ -207,8 +211,9 @@ class LayoutEngine:
         except AttributeError:  # very old reportlab
             pass
         for item in sheet.items:
-            c.rect(item.x_mm * mm, item.y_mm * mm,
-                   item.width_mm * mm, item.height_mm * mm)
+            # Cut path = finished size (bleed excluded), see _draw_item_marks.
+            trim_x, trim_y, trim_w, trim_h = item.trim_rect_mm()
+            c.rect(trim_x * mm, trim_y * mm, trim_w * mm, trim_h * mm)
         c.save()
         packet.seek(0)
         return fitz.open("pdf", packet.read())
@@ -310,10 +315,12 @@ class LayoutEngine:
             crop_off = 2 * mm
 
             for item in sheet.items:
-                x = item.x_mm * mm
-                y = item.y_mm * mm
-                w = item.width_mm * mm
-                h = item.height_mm * mm
+                # Trim rectangle, not the bleed edge (see _draw_item_marks).
+                trim_x, trim_y, trim_w, trim_h = item.trim_rect_mm()
+                x = trim_x * mm
+                y = trim_y * mm
+                w = trim_w * mm
+                h = trim_h * mm
 
                 # Cut path in red
                 c.setStrokeColorRGB(1, 0, 0)

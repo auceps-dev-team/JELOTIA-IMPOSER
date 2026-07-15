@@ -3,6 +3,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
     QFrame,
@@ -169,6 +170,19 @@ class SettingsWidget(QWidget):
         self.plotter_mark_length.setRange(5, 20)
         self.plotter_mark_length.setValue(15)
 
+        # Bleed: 0 = off. The artwork is extended past the trim line so a
+        # drifting blade never exposes white; cutting still targets the
+        # finished size.
+        self.add_bleed = self._style_input(QDoubleSpinBox())
+        self.add_bleed.setRange(0.0, 20.0)
+        self.add_bleed.setSingleStep(0.5)
+        self.add_bleed.setSuffix(" mm")
+        self.add_bleed.setToolTip(
+            "0 = désactivé. Les fichiers livrés sans fond perdu sont étendus "
+            "automatiquement (bords étirés en vectoriel, miroir pour les images) ; "
+            "ceux qui en ont déjà un sont conservés tels quels."
+        )
+
         layout.addRow("Largeur Planche (mm):", self.sheet_width)
         layout.addRow("Hauteur Planche (mm):", self.sheet_height)
         layout.addRow("Espacement entre poses (mm):", self.spacing)
@@ -176,6 +190,7 @@ class SettingsWidget(QWidget):
         layout.addRow("", self.rotation_allowed)
         layout.addRow("Repères plotter:", self.plotter_marks)
         layout.addRow("Longueur des repères (mm):", self.plotter_mark_length)
+        layout.addRow("Fond perdu automatique (mm):", self.add_bleed)
 
     def setup_tab_preflight(self):
         tab, layout = self._create_form_tab("Preflight")
@@ -298,6 +313,7 @@ class SettingsWidget(QWidget):
         self.plotter_mark_length.setValue(
             int(self.config.get("imposition", "plotter_mark_length") or 15)
         )
+        self.add_bleed.setValue(float(self.config.get("imposition", "add_bleed") or 0.0))
 
         # Preflight
         self.min_dpi.setValue(self.config.get("preflight", "min_dpi") or 300)
@@ -355,6 +371,7 @@ class SettingsWidget(QWidget):
             ("none", "graphtec1", "graphtec2")[self.plotter_marks.currentIndex()],
         )
         self.config.set("imposition", "plotter_mark_length", self.plotter_mark_length.value())
+        self.config.set("imposition", "add_bleed", self.add_bleed.value())
 
         # Preflight
         self.config.set("preflight", "min_dpi", self.min_dpi.value())
