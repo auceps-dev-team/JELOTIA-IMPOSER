@@ -112,6 +112,99 @@ class ArchivedJobsDialog(QDialog):
             self._reload()
 
 
+class GangDialog(QDialog):
+    """Compatible pending orders that can share sheets. Ganging them creates a
+    single job whose nesting fills the media far better than one order at a
+    time; the source orders are archived (kept, not lost)."""
+
+    gang_requested = Signal(object)  # GangGroup
+
+    def __init__(self, groups: list, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Amalgamer des commandes")
+        self.resize(640, 460)
+        self.groups = groups
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(10)
+
+        intro = QLabel(
+            "Les commandes ci-dessous partagent les mêmes paramètres de production "
+            "et peuvent donc être imposées ensemble sur les mêmes planches."
+        )
+        intro.setWordWrap(True)
+        intro.setStyleSheet(f"color:{_T.TEXT_2}; border:none;")
+        layout.addWidget(intro)
+
+        self.list_widget = QListWidget()
+        self.list_widget.currentRowChanged.connect(self._on_selected)
+        layout.addWidget(self.list_widget, 1)
+
+        self.detail = QLabel("")
+        self.detail.setWordWrap(True)
+        self.detail.setStyleSheet(
+            f"color:{_T.TEXT_MUTE}; font-size:11px; border:none; "
+            f"background-color:{_T.BG_PANEL}; padding:8px;"
+        )
+        layout.addWidget(self.detail)
+
+        note = QLabel(
+            "L'amalgame crée un nouveau job regroupant tous les fichiers (quantités "
+            "additionnées) et archive les commandes d'origine."
+        )
+        note.setWordWrap(True)
+        note.setStyleSheet(f"color:{_T.TEXT_DIM}; font-size:11px; border:none;")
+        layout.addWidget(note)
+
+        actions = QHBoxLayout()
+        self.btn_gang = QPushButton("[AMALGAMER CES COMMANDES]")
+        self.btn_gang.setObjectName("primary")
+        self.btn_gang.clicked.connect(self._confirm)
+        btn_close = QPushButton("Fermer")
+        btn_close.clicked.connect(self.reject)
+        actions.addStretch()
+        actions.addWidget(self.btn_gang)
+        actions.addWidget(btn_close)
+        layout.addLayout(actions)
+
+        for group in self.groups:
+            self.list_widget.addItem(
+                f"{len(group.members)} commandes  ·  {group.description}  ·  "
+                f"{group.total_copies} exemplaire(s)"
+            )
+        has = bool(self.groups)
+        self.btn_gang.setEnabled(has)
+        if has:
+            self.list_widget.setCurrentRow(0)
+        else:
+            self.detail.setText(
+                "Aucun groupe amalgamable : il faut au moins deux commandes en "
+                "attente partageant exactement les mêmes paramètres de production "
+                "(planche, espacement, marges, repères, format d'export)."
+            )
+
+    def _on_selected(self, row: int):
+        if not (0 <= row < len(self.groups)):
+            return
+        group = self.groups[row]
+        lines = [
+            f"• {m.name} — {len(m.source_paths)} fichier(s), {m.total_copies} exemplaire(s)"
+            for m in group.members
+        ]
+        self.detail.setText(
+            "\n".join(lines)
+            + f"\n\n→ 1 job amalgamé : {group.total_files} fichier(s) uniques, "
+            f"{group.total_copies} exemplaire(s) au total."
+        )
+
+    def _confirm(self):
+        row = self.list_widget.currentRow()
+        if 0 <= row < len(self.groups):
+            self.gang_requested.emit(self.groups[row])
+            self.accept()
+
+
 class JobsWidget(QWidget):
     view_details_requested = Signal(str)   # emits job_name
     cancel_job_requested = Signal(str)
@@ -120,6 +213,7 @@ class JobsWidget(QWidget):
     archive_job_requested = Signal(str)
     duplicate_job_requested = Signal(str)
     archives_requested = Signal()
+    gang_requested = Signal()
     job_created = Signal(str, list, dict)  # emits (job_name, file_paths:list[str], overrides:dict)
 
     def __init__(self):
@@ -149,6 +243,13 @@ class JobsWidget(QWidget):
         self.status_filter.addItems(["Tous les statuts", "PENDING", "PROCESSING", "DONE", "ERROR"])
         self.status_filter.currentTextChanged.connect(self._filter_table)
 
+        self.btn_gang = QPushButton("[AMALGAMER…]")
+        self.btn_gang.setToolTip(
+            "Regrouper plusieurs commandes en attente compatibles sur les mêmes "
+            "planches — moins de chute"
+        )
+        self.btn_gang.clicked.connect(self.gang_requested.emit)
+
         self.btn_archives = QPushButton("[ARCHIVES…]")
         self.btn_archives.clicked.connect(self.archives_requested.emit)
 
@@ -159,6 +260,7 @@ class JobsWidget(QWidget):
         toolbar.addWidget(self.search_input, 1)
         toolbar.addWidget(self.status_filter)
         toolbar.addStretch()
+        toolbar.addWidget(self.btn_gang)
         toolbar.addWidget(self.btn_archives)
         toolbar.addWidget(self.btn_new_job)
         self.main_layout.addLayout(toolbar)
@@ -281,6 +383,16 @@ class JobsWidget(QWidget):
         btn_archive.clicked.connect(lambda: self.archive_job_requested.emit(name))
         btn_delete.clicked.connect(lambda: self._confirm_delete(name))
         return cell
+
+    def names_with_status(self, status: str) -> list:
+        """Job names currently in `status` (the table mirrors the DB)."""
+        names = []
+        for row in range(self.table.rowCount()):
+            item = self.table.item(row, _COL_STATUS)
+            name_item = self.table.item(row, _COL_NAME)
+            if item and name_item and item.data(Qt.ItemDataRole.UserRole) == status:
+                names.append(name_item.text())
+        return names
 
     def _row_status(self, name: str) -> str:
         row = self._find_row_by_name(name)
