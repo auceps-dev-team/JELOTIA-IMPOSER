@@ -200,7 +200,7 @@ class TemplateDesignerDialog(QDialog):
         from PySide6.QtWidgets import QScrollArea
 
         container = QFrame()
-        container.setFixedWidth(340)
+        container.setFixedWidth(360)
         container.setStyleSheet(
             f"QFrame {{ background-color:{_T.BG_PANEL}; border-left:1px solid {_T.BORDER}; }}"
         )
@@ -214,8 +214,11 @@ class TemplateDesignerDialog(QDialog):
         panel = QWidget()
         panel.setStyleSheet(f"background-color:{_T.BG_PANEL};")
         side = QVBoxLayout(panel)
-        side.setContentsMargins(18, 16, 18, 16)
-        side.setSpacing(12)
+        # Tight margins: the scroll bar already eats ~12px INSIDE the fixed
+        # width — generous margins would push rows past the viewport and clip
+        # them on the right (fields, "Retirer", the variables hint...).
+        side.setContentsMargins(12, 14, 12, 14)
+        side.setSpacing(11)
 
         # -- Template management ---------------------------------------- #
         side.addWidget(self._title("MODÈLE"))
@@ -223,8 +226,7 @@ class TemplateDesignerDialog(QDialog):
         self.combo_templates.currentIndexChanged.connect(self._on_template_selected)
         side.addWidget(self.combo_templates)
 
-        form = QFormLayout()
-        form.setSpacing(8)
+        form = self._form()
         self.name_input = QLineEdit(self.template.name)
         self.name_input.textChanged.connect(self._on_name_changed)
         form.addRow("Nom :", self.name_input)
@@ -235,17 +237,21 @@ class TemplateDesignerDialog(QDialog):
         form.addRow("Format :", self.combo_format)
 
         dims = QHBoxLayout()
+        dims.setSpacing(4)
         self.spin_w = QDoubleSpinBox()
         self.spin_h = QDoubleSpinBox()
         for spin in (self.spin_w, self.spin_h):
             spin.setRange(10.0, 2000.0)
             spin.setSuffix(" mm")
-            spin.setFixedWidth(105)
+            # An honest minimum ("85,00 mm" + arrows): two of them can't sit
+            # beside the label in this narrow panel, so WrapLongRows moves the
+            # label above and gives the row its full width — instead of
+            # squeezing the fields until the value itself is cut ("85,(").
+            spin.setMinimumWidth(110)
             spin.valueChanged.connect(self._on_dims_changed)
-        dims.addWidget(self.spin_w)
+        dims.addWidget(self.spin_w, 1)
         dims.addWidget(QLabel("×"))
-        dims.addWidget(self.spin_h)
-        dims.addStretch()
+        dims.addWidget(self.spin_h, 1)
         form.addRow("Dimensions :", dims)
         side.addLayout(form)
 
@@ -263,7 +269,7 @@ class TemplateDesignerDialog(QDialog):
 
         # -- QR zone ------------------------------------------------------ #
         side.addWidget(self._title("CODE QR"))
-        qr_form = QFormLayout()
+        qr_form = self._form()
         self.spin_qr = QDoubleSpinBox()
         self.spin_qr.setRange(5.0, 500.0)
         self.spin_qr.setSuffix(" mm")
@@ -278,9 +284,9 @@ class TemplateDesignerDialog(QDialog):
         side.addWidget(self.btn_add_text)
 
         self.text_props = QWidget()
-        tp = QFormLayout(self.text_props)
+        tp = self._form()
+        self.text_props.setLayout(tp)
         tp.setContentsMargins(0, 4, 0, 0)
-        tp.setSpacing(8)
         self.text_input = QLineEdit()
         self.text_input.textChanged.connect(self._on_text_changed)
         tp.addRow("Contenu :", self.text_input)
@@ -303,14 +309,14 @@ class TemplateDesignerDialog(QDialog):
 
         # -- Variables (colonnes Excel/CSV) -------------------------------- #
         side.addWidget(self._title("VARIABLES"))
-        vars_row = QHBoxLayout()
+        # Button and combo stacked, not side by side: together they need more
+        # width than the panel's viewport and would be clipped.
         self.btn_load_columns = QPushButton("Colonnes Excel/CSV…")
         self.btn_load_columns.clicked.connect(self._load_columns)
-        vars_row.addWidget(self.btn_load_columns)
+        side.addWidget(self.btn_load_columns)
         self.combo_vars = QComboBox()
         self.combo_vars.setEnabled(False)
-        vars_row.addWidget(self.combo_vars, 1)
-        side.addLayout(vars_row)
+        side.addWidget(self.combo_vars)
         self.btn_insert_var = QPushButton("[+ INSÉRER LA VARIABLE]")
         self.btn_insert_var.setEnabled(False)
         self.btn_insert_var.clicked.connect(self._insert_variable)
@@ -340,6 +346,18 @@ class TemplateDesignerDialog(QDialog):
         scroll.setWidget(panel)
         wrap.addWidget(scroll)
         root.addWidget(container)
+
+    def _form(self) -> QFormLayout:
+        """A form sized for a narrow panel: when a row can't fit its label and
+        field side by side, the label wraps above the field instead of pushing
+        the field out of the viewport (the clipping seen in the field report)."""
+        form = QFormLayout()
+        form.setSpacing(8)
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        return form
 
     def _title(self, text: str) -> QLabel:
         lbl = QLabel(f"┌─[ {text} ]──")
@@ -397,6 +415,9 @@ class TemplateDesignerDialog(QDialog):
 
         # Sync the panel controls with the template.
         self.name_input.setText(t.name)
+        # setText leaves the cursor at the end, scrolling a long name so it
+        # reads "arte visite JELOTIA" — show it from the start.
+        self.name_input.setCursorPosition(0)
         self.spin_w.setValue(t.width_mm)
         self.spin_h.setValue(t.height_mm)
         self.spin_qr.setValue(t.qr_zone.size_mm)

@@ -1,6 +1,6 @@
 [project]
 name = "jelotia-imposer"
-version = "1.29.0"
+version = "1.29.1"
 description = "Logiciel Professionnel d'Imposition Automatique Industrielle"
 readme = "README.md"
 requires-python = ">=3.12"
