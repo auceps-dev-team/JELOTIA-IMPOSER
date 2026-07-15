@@ -256,10 +256,32 @@ class SettingsWidget(QWidget):
         self.scheduled_time = self._style_input(QLineEdit())
         self.scheduled_time.setPlaceholderText("ex: 20:00")
 
+        self.btn_watch_rules = QPushButton("[DOSSIERS SURVEILLÉS…]")
+        self.btn_watch_rules.setToolTip(
+            "Lier un dossier à une gamme produit : déposer un fichier suffit à "
+            "créer le job avec la bonne recette (mode 24/7)"
+        )
+        self.btn_watch_rules.clicked.connect(self._open_watch_rules)
+
         layout.addRow("Délai de regroupement (min):", self.group_delay)
         layout.addRow("Limite de fichiers par Job:", self.max_files)
         layout.addRow("", self.enable_scheduling)
         layout.addRow("Heure de déclenchement:", self.scheduled_time)
+        layout.addRow("Hot folders à règles:", self.btn_watch_rules)
+
+    def _open_watch_rules(self):
+        """Edited rules take effect immediately — restarting the app to watch a
+        new folder would defeat the point of unattended production."""
+        from src.ui.widgets.watch_rules_dialog import WatchRulesDialog
+
+        dialog = WatchRulesDialog(self)
+        dialog.exec()
+        if not dialog.changed:
+            return
+        window = self.window()
+        restart = getattr(window, "restart_hot_folder_monitors", None)
+        if callable(restart):
+            restart()
 
     def setup_tab_performance(self):
         tab, layout = self._create_form_tab("Performance")

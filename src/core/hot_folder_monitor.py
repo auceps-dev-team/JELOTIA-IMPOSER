@@ -10,8 +10,10 @@ from watchdog.observers import Observer
 
 
 class HotFolderSignals(QObject):
-    # Emits the path of the ready job folder or file
-    new_job_ready = Signal(str)
+    # Emits (path of the ready job folder/file, rule_id of the watched folder).
+    # The rule travels with the file: it decides which product preset the job
+    # is produced with, and files from different rules must never be merged.
+    new_job_ready = Signal(str, str)
 
 class NewJobHandler(FileSystemEventHandler):
     def __init__(self, monitor):
@@ -45,9 +47,12 @@ class StabilizationThread(QThread):
         self.wait()
 
 class HotFolderMonitor:
-    def __init__(self, input_path: str, processing_path: str):
+    def __init__(self, input_path: str, processing_path: str, rule_id: str = ""):
         self.input_path = Path(input_path)
         self.processing_path = Path(processing_path)
+        # Which watch rule this folder belongs to ("" = the default folder,
+        # produced with the global settings).
+        self.rule_id = rule_id
         
         # Create directories if they don't exist
         self.input_path.mkdir(parents=True, exist_ok=True)
@@ -150,9 +155,9 @@ class HotFolderMonitor:
                 counter += 1
                 
             shutil.move(str(path), str(dest_path))
-            
+
             # Emit signal
-            self.signals.new_job_ready.emit(str(dest_path))
+            self.signals.new_job_ready.emit(str(dest_path), self.rule_id)
             return True
             
         except Exception as e:

@@ -567,8 +567,12 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ #
 
     def setup_hot_folder_monitor(self):
+        """Watches the default input folder plus every configured watch rule
+        (one folder = one product preset). All monitors feed the same
+        AutoProcessor, which keeps their files apart by rule."""
         from src.core.auto_processor import AutoProcessor
         from src.core.hot_folder_monitor import HotFolderMonitor
+        from src.core.watch_rules import active_rules, ensure_folders
         from src.utils.config_manager import ConfigManager
 
         config = ConfigManager()
@@ -581,15 +585,78 @@ class MainWindow(QMainWindow):
         self.auto_processor.job_grouped.connect(self._handle_hot_folder_job)
         self.auto_processor.start()
 
+        # Default folder: rule_id "" → global settings (unchanged behaviour).
+        self.hf_monitors = []
         self.hf_monitor = HotFolderMonitor(input_path, processing_path)
         self.hf_monitor.signals.new_job_ready.connect(self.auto_processor.add_file)
         self.hf_monitor.start()
+        self.hf_monitors.append(self.hf_monitor)
 
-    def _handle_hot_folder_job(self, group_name: str, files: list):
+        rules = active_rules()
+        ensure_folders(rules)
+        for rule in rules:
+            try:
+                monitor = HotFolderMonitor(rule.folder, processing_path, rule_id=str(rule.id))
+                monitor.signals.new_job_ready.connect(self.auto_processor.add_file)
+                monitor.start()
+                self.hf_monitors.append(monitor)
+            except Exception as e:
+                self._log(f"Surveillance impossible pour « {rule.name} » : {e}")
+        if rules:
+            self._log(f"{len(rules)} dossier(s) surveillé(s) avec gamme")
+
+    def restart_hot_folder_monitors(self):
+        """Applies edited watch rules without restarting the application."""
+        for monitor in getattr(self, "hf_monitors", []):
+            try:
+                monitor.stop()
+            except Exception:
+                pass
+        self.hf_monitors = []
+
+        from src.core.hot_folder_monitor import HotFolderMonitor
+        from src.core.watch_rules import active_rules, ensure_folders
+        from src.utils.config_manager import ConfigManager
+
+        config = ConfigManager()
+        input_path = config.get("paths", "input") or str(
+            Path.home() / "Jelotia" / "HotFolder" / "Input"
+        )
+        processing_path = str(Path(input_path).parent / "Processing")
+
+        self.hf_monitor = HotFolderMonitor(input_path, processing_path)
+        self.hf_monitor.signals.new_job_ready.connect(self.auto_processor.add_file)
+        self.hf_monitor.start()
+        self.hf_monitors.append(self.hf_monitor)
+
+        rules = active_rules()
+        ensure_folders(rules)
+        for rule in rules:
+            try:
+                monitor = HotFolderMonitor(rule.folder, processing_path, rule_id=str(rule.id))
+                monitor.signals.new_job_ready.connect(self.auto_processor.add_file)
+                monitor.start()
+                self.hf_monitors.append(monitor)
+            except Exception as e:
+                self._log(f"Surveillance impossible pour « {rule.name} » : {e}")
+        self._log(f"Surveillance relancée — {len(self.hf_monitors)} dossier(s)")
+
+    def _handle_hot_folder_job(self, group_name: str, files: list, rule_id: str = ""):
+        """A hot folder produced a group: the watched folder's rule decides the
+        product preset, so the job is produced with the right recipe without
+        anyone touching the settings."""
+        from src.core.watch_rules import load_rules, settings_for_rule
+
+        rule = None
+        if rule_id:
+            rule = next((r for r in load_rules() if str(r.id) == rule_id), None)
+        settings = settings_for_rule(rule, self._build_job_settings())
+
         self.jobs_view.add_job(group_name, len(files), "PENDING")
-        self._log(f"Hot Folder: {group_name} ({len(files)} fichier(s))")
+        origin = f" [{rule.name}]" if rule is not None else ""
+        self._log(f"Hot Folder{origin}: {group_name} ({len(files)} fichier(s))")
         self.notifier.notify("Nouveau Job", f"{group_name} — {len(files)} fichier(s)", False)
-        self._submit_job(group_name, files)
+        self._submit_job(group_name, files, settings_override=settings)
 
     # ------------------------------------------------------------------ #
     #  Job persistence                                                     #
@@ -785,6 +852,9 @@ class MainWindow(QMainWindow):
             return
         for p in processing_dir.iterdir():
             if p.is_file() and p.suffix.lower() in (".pdf", ".tiff", ".jpg", ".png"):
+                # No rule_id: a file already moved to Processing has lost the
+                # folder it came from, so it is reprocessed with the global
+                # settings rather than guessing a preset.
                 self.auto_processor.add_file(str(p))
 
     # ------------------------------------------------------------------ #
@@ -856,7 +926,14 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ #
 
     def closeEvent(self, event):
-        for attr in ("hf_monitor", "auto_processor", "worker_thread"):
+        # Every watch-rule monitor must be stopped, not just the default one —
+        # otherwise their observer threads outlive the window.
+        for monitor in getattr(self, "hf_monitors", []):
+            try:
+                monitor.stop()
+            except Exception:
+                pass
+        for attr in ("auto_processor", "worker_thread"):
             obj = getattr(self, attr, None)
             if obj:
                 obj.stop()

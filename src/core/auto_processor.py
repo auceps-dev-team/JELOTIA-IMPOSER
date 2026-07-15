@@ -10,18 +10,20 @@ from src.utils.config_manager import ConfigManager
 
 
 class AutoProcessor(QThread):
-    job_grouped = Signal(str, list) # Emits (Group Name, list of file paths)
-    
+    # Emits (Group Name, list of file paths, rule_id of the source hot folder)
+    job_grouped = Signal(str, list, str)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.config = ConfigManager()
         self.running = True
         self.mutex = QMutex()
-        
-        # Pending files dict: {filepath: {"added_at": datetime, "size": (w, h), "priority": int, "processed": bool}}
+
+        # Pending files dict: {filepath: {"added_at": datetime, "size": (w, h),
+        # "priority": int, "processed": bool, "rule_id": str}}
         self.pending_files = {}
-        
-    def add_file(self, file_path: str):
+
+    def add_file(self, file_path: str, rule_id: str = ""):
         with QMutexLocker(self.mutex):
             p = Path(file_path)
             # Determine priority based on name
@@ -30,12 +32,13 @@ class AutoProcessor(QThread):
                 priority = 10
             elif p.suffix.lower() in [".jpg", ".jpeg", ".png"]:
                 priority = 0
-                
+
             self.pending_files[file_path] = {
                 "added_at": datetime.now(),
                 "size": None, # Will be extracted during grouping
                 "priority": priority,
-                "processed": False
+                "processed": False,
+                "rule_id": rule_id,
             }
             
     def _extract_size(self, file_path: str):
@@ -89,40 +92,64 @@ class AutoProcessor(QThread):
                 delay_minutes = int(self.config.get("automation", "group_delay_minutes") or 0)
                 max_files = int(self.config.get("automation", "max_files_per_job") or 50)
                 
-                # Group by size
+                # Group by (rule, size). The rule is part of the key on
+                # purpose: two watched folders carry different product presets
+                # (media, sheet, marks…), so their files can never share a job
+                # even when the artwork happens to be the same size.
                 groups = {}
                 for fp, data in self.pending_files.items():
                     if data["processed"]:
                         continue
-                        
+
                     # Check delay
                     age = datetime.now() - data["added_at"]
                     if age.total_seconds() < delay_minutes * 60 and data["priority"] < 10:
                         # Wait for delay unless it's high priority
                         continue
-                        
-                    size_key = data["size"]
-                    if size_key not in groups:
-                        groups[size_key] = []
-                    groups[size_key].append((fp, data["priority"]))
-                    
+
+                    key = (data.get("rule_id", ""), data["size"])
+                    if key not in groups:
+                        groups[key] = []
+                    groups[key].append((fp, data["priority"]))
+
                 # 4. Trigger ready groups
-                for size_key, files_tuples in groups.items():
+                for (rule_id, size_key), files_tuples in groups.items():
                     # Sort by priority (descending)
                     files_tuples.sort(key=lambda x: x[1], reverse=True)
-                    
+
                     # Split by max_files
                     for i in range(0, len(files_tuples), max_files):
                         batch = files_tuples[i:i+max_files]
                         batch_paths = [b[0] for b in batch]
-                        
-                        group_name = f"AutoJob_{int(time.time())}_{size_key[0]}x{size_key[1]}"
-                        
+
+                        label = self._rule_label(rule_id)
+                        group_name = (
+                            f"{label}_{int(time.time())}_{size_key[0]}x{size_key[1]}"
+                        )
+
                         # Mark processed
                         for fp in batch_paths:
                             self.pending_files[fp]["processed"] = True
-                            
-                        self.job_grouped.emit(group_name, batch_paths)
+
+                        self.job_grouped.emit(group_name, batch_paths, rule_id)
+
+    def _rule_label(self, rule_id: str) -> str:
+        """Names the job after its watched folder, so the operator sees which
+        line produced it right in the Jobs list."""
+        if not rule_id:
+            return "AutoJob"
+        try:
+            from src.core.watch_rules import load_rules
+
+            for rule in load_rules():
+                if str(rule.id) == rule_id:
+                    safe = "".join(
+                        c if c.isalnum() or c in "-_" else "_" for c in rule.name
+                    )
+                    return safe or "AutoJob"
+        except Exception:
+            pass
+        return "AutoJob"
                         
     def stop(self):
         self.running = False

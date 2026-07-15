@@ -228,6 +228,17 @@ class ProductPreset(BaseModel):
     archived: bool = False
 
 
+class WatchRule(BaseModel):
+    """One watched folder bound to a product preset: drop files in it and the
+    job is created with that gamme's whole recipe — the unattended 24/7 mode.
+    An empty preset_id means "use the global settings"."""
+    id: UUID = Field(default_factory=uuid4)
+    name: str = "Nouvelle règle"
+    folder: str = ""
+    preset_id: str = ""
+    enabled: bool = True
+
+
 class JobStats(BaseModel):
     total_files: int = 0
     total_quantity: int = 0
