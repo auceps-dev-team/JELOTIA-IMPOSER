@@ -256,7 +256,12 @@ def test_process_flattening_p(engine, tmp_path):
     assert result.preflight_status == PreflightStatus.OK
 
 
-def test_process_add_bleed_image(engine, tmp_path):
+def test_process_no_longer_adds_bleed_itself(engine, tmp_path):
+    """La correction ajoutait autrefois un cadre BLANC de add_bleed_mm et
+    agrandissait l'item — soit exactement le liseré que le fond perdu doit
+    éviter. Depuis la v1.30.0 c'est BleedEngine qui s'en charge APRÈS la
+    correction (bords miroités/étirés) ; la correction ne doit donc plus
+    toucher aux dimensions, sinon le fond perdu serait appliqué deux fois."""
     engine.settings.add_bleed_mm = 5.0
     img_path = create_dummy_image(tmp_path / "test_bleed.jpg", mode="RGB", dpi=(300, 300))
     item = FileItem(
@@ -275,8 +280,9 @@ def test_process_add_bleed_image(engine, tmp_path):
         ],
     )
     result = engine.process(item)
-    assert result.width_mm == 110.0
-    assert result.height_mm == 110.0
+    assert result.width_mm == 100.0
+    assert result.height_mm == 100.0
+    assert result.bleed_mm == 0.0
 
 
 def test_process_add_bleed_pdf(engine, tmp_path):

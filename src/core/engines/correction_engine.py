@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import fitz  # PyMuPDF
@@ -11,6 +12,8 @@ from src.core.models.domain import (
     PreflightErrorType,
     PreflightStatus,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class CorrectionEngine:
@@ -80,6 +83,26 @@ class CorrectionEngine:
 
         return corrected_item
 
+    def _to_cmyk(self, img: "Image.Image") -> "Image.Image":
+        """CMYK conversion through the configured ICC profile, with an honest
+        fallback: without a profile we keep Pillow's naive conversion rather
+        than fail the job, but the log says the output is not colour-managed."""
+        profile = (self.settings.icc_profile_path or "").strip()
+        if not profile:
+            logger.warning(
+                "Aucun profil ICC configuré — conversion CMJN approximative "
+                "(F6·CONFIG > Exportation). L'encrage peut dépasser les limites RIP."
+            )
+            return img.convert("CMYK")
+
+        from src.core.engines.icc_engine import ICCError, convert_image_to_cmyk
+
+        try:
+            return convert_image_to_cmyk(img, Path(profile))
+        except ICCError as e:
+            logger.error(f"{e} — conversion CMJN approximative utilisée à la place")
+            return img.convert("CMYK")
+
     def _correct_image(self, file_item: FileItem, cmyk: bool, flatten: bool, dpi: bool) -> Path:
         """
         Applies corrections to raster images using Pillow.
@@ -99,9 +122,13 @@ class CorrectionEngine:
             else:
                 img = img.convert("RGB")
 
-        # Color Conversion
+        # Colour conversion — through a real ICC profile when one is
+        # configured. Pillow's img.convert("CMYK") is a naive formula that
+        # turns pure black into C+M+Y+K = 300 % ink (undryable, RIP-rejected);
+        # the ICC path gives a clean 100K black. Falls back to the naive
+        # conversion only when no profile is available, and says so.
         if cmyk and self.settings.force_cmyk and img.mode != "CMYK":
-            img = img.convert("CMYK")
+            img = self._to_cmyk(img)
 
         # Resampling DPI
         target_dpi = (file_item.dpi, file_item.dpi)
@@ -112,22 +139,11 @@ class CorrectionEngine:
             img = img.resize(new_size, resample=Image.Resampling.LANCZOS)
             file_item.dpi = self.settings.min_dpi
 
-        # Add Bleed if required
-        if self.settings.add_bleed_mm > 0:
-            bleed_px = int((self.settings.add_bleed_mm / 25.4) * file_item.dpi)
-            new_width = img.width + 2 * bleed_px
-            new_height = img.height + 2 * bleed_px
-            # Create a new image with white background (or CMYK white)
-            bleed_bg = Image.new(
-                img.mode,
-                (new_width, new_height),
-                color=(255, 255, 255) if img.mode == "RGB" else (0, 0, 0, 0),
-            )
-            bleed_bg.paste(img, (bleed_px, bleed_px))
-            img = bleed_bg
-            # Update FileItem dimensions
-            file_item.width_mm += 2 * self.settings.add_bleed_mm
-            file_item.height_mm += 2 * self.settings.add_bleed_mm
+        # NOTE: bleed is NOT added here. This used to pad the artwork with a
+        # WHITE frame and call it bleed — the exact sliver that bleed exists to
+        # prevent. It now happens after correction, in BleedEngine (mirrored
+        # edges for rasters, stretched vector edges for PDFs); doing it in both
+        # places would also apply it twice.
 
         new_filename = f"corrected_{file_item.id}.tif"
         new_path = self.work_dir / new_filename

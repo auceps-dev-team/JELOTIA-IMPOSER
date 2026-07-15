@@ -1,3 +1,4 @@
+from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -218,7 +219,17 @@ class SettingsWidget(QWidget):
 
         self.enable_notifications = QCheckBox("Activer les notifications système (Windows)")
 
-        self.icc_profile = self._style_input(QLineEdit())
+        # Real ICC profile (a file), not a free-text label: without one, the
+        # CMYK conversion is Pillow's naive formula, which turns black into
+        # 300% ink. Discovered profiles are listed; "Parcourir" accepts the
+        # shop's own (FOGRA39, printer linearisation…).
+        self.icc_profile = self._style_input(QComboBox())
+        self.icc_profile.setMinimumWidth(220)
+        self.btn_icc_browse = QPushButton("Parcourir…")
+        self.btn_icc_browse.clicked.connect(self._browse_icc)
+        icc_row = QHBoxLayout()
+        icc_row.addWidget(self.icc_profile, 1)
+        icc_row.addWidget(self.btn_icc_browse)
 
         self.cut_contour = QCheckBox(
             "Couche CutContour (ton direct) sur les planches — RIP print & cut"
@@ -228,7 +239,7 @@ class SettingsWidget(QWidget):
         layout.addRow("Résolution (DPI):", self.export_dpi)
         layout.addRow("Archiver pendant (jours):", self.archive_days)
         layout.addRow("", self.enable_notifications)
-        layout.addRow("Profil ICC:", self.icc_profile)
+        layout.addRow("Profil ICC (CMJN):", icc_row)
         layout.addRow("", self.cut_contour)
 
     def setup_tab_users(self):
@@ -268,6 +279,53 @@ class SettingsWidget(QWidget):
         layout.addRow("", self.enable_scheduling)
         layout.addRow("Heure de déclenchement:", self.scheduled_time)
         layout.addRow("Hot folders à règles:", self.btn_watch_rules)
+
+    def _populate_icc_profiles(self, selected: str = "") -> None:
+        """Lists the CMYK profiles found on the machine; the stored value is
+        the profile's PATH (data), the name is only what the operator reads."""
+        from src.core.engines.icc_engine import discover_profiles
+
+        self.icc_profile.blockSignals(True)
+        self.icc_profile.clear()
+        self.icc_profile.addItem("— aucun (conversion approximative) —", "")
+        try:
+            for info in discover_profiles(cmyk_only=True):
+                self.icc_profile.addItem(f"{info.name}  ({info.path.name})", str(info.path))
+        except Exception:
+            pass
+        if selected:
+            index = self.icc_profile.findData(selected)
+            if index < 0:  # a profile chosen before but no longer discovered
+                self.icc_profile.addItem(Path(selected).name, selected)
+                index = self.icc_profile.count() - 1
+            self.icc_profile.setCurrentIndex(index)
+        self.icc_profile.blockSignals(False)
+
+    def _browse_icc(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Profil ICC CMJN", "", "Profils ICC (*.icc *.icm);;Tous (*.*)"
+        )
+        if not path:
+            return
+        from src.core.engines.icc_engine import read_profile
+
+        info = read_profile(Path(path))
+        if info is None:
+            QMessageBox.warning(
+                self, "Profil illisible",
+                f"{Path(path).name} n'est pas un profil ICC valide.",
+            )
+            return
+        if not info.is_cmyk:
+            reply = QMessageBox.question(
+                self, "Profil non CMJN",
+                f"« {info.name} » est un profil {info.color_space or 'inconnu'}, "
+                "pas CMJN. L'utiliser quand même ?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+        self._populate_icc_profiles(selected=path)
 
     def _open_watch_rules(self):
         """Edited rules take effect immediately — restarting the app to watch a
@@ -352,7 +410,10 @@ class SettingsWidget(QWidget):
         # Output & Archive
         self.archive_days.setValue(self.config.get("output", "archive_days") or 15)
         self.enable_notifications.setChecked(self.config.get("output", "enable_notifications") or False)
-        self.icc_profile.setText(self.config.get("export", "icc_profile") or "")
+        # Historically a free-text label ("Coated FOGRA39"); only a real file
+        # path can drive a conversion, so a legacy label resolves to "none".
+        stored = self.config.get("export", "icc_profile") or ""
+        self._populate_icc_profiles(selected=stored if Path(stored).is_file() else "")
 
         # Users
         role = self.config.get("users", "role")
@@ -407,7 +468,7 @@ class SettingsWidget(QWidget):
         # Output & Archive
         self.config.set("output", "archive_days", self.archive_days.value())
         self.config.set("output", "enable_notifications", self.enable_notifications.isChecked())
-        self.config.set("export", "icc_profile", self.icc_profile.text())
+        self.config.set("export", "icc_profile", self.icc_profile.currentData() or "")
 
         # Users & UI
         self.config.set("users", "role", self.user_role.currentText())

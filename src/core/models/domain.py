@@ -62,6 +62,9 @@ class JobSettings(BaseModel):
     # Preflight overrides
     min_dpi: int = 300
     force_cmyk: bool = True
+    # Absolute path to the destination CMYK ICC profile. Empty = no colour
+    # management (Pillow's naive conversion, which overshoots ink limits).
+    icc_profile_path: str = ""
 
     # Export Settings
     export_format: str = "PDF/X-1a"

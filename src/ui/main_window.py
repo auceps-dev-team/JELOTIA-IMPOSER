@@ -138,6 +138,7 @@ class MainWindow(QMainWindow):
             allow_rotation=bool(config.get("imposition", "rotation_allowed")),
             add_bleed_mm=float(config.get("imposition", "add_bleed") or 0.0),
             min_dpi=int(config.get("preflight", "min_dpi") or 300),
+            icc_profile_path=str(config.get("export", "icc_profile") or ""),
             export_format=export_format,
             export_dpi=int(config.get("export", "dpi") or 300),
             generate_thumbnail=True,
