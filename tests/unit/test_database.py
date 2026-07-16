@@ -284,6 +284,17 @@ def test_qr_batch_history_roundtrip(repo):
     assert batches[0].succeeded == 11
 
 
+def test_files_processed_today_counts_source_paths(repo):
+    a = str(uuid.uuid4())
+    repo.create_job_stub(a, "Aujourd'hui A", ["1.pdf", "2.pdf", "3.pdf"], JobSettings())
+    b = str(uuid.uuid4())
+    repo.create_job_stub(b, "Aujourd'hui B", ["4.pdf"], JobSettings())
+    # Archivé : compte quand même (sinon on contournerait le plafond).
+    repo.set_job_archived(b, True)
+
+    assert repo.files_processed_today() == 4
+
+
 def test_get_system_counts(repo):
     a = str(uuid.uuid4())
     repo.create_job_stub(a, "Job A", ["a.pdf"], JobSettings())

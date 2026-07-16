@@ -90,6 +90,11 @@ class JobSettings(BaseModel):
     # Print & cut RIPs: stroke every pose with the "CutContour" spot color.
     cut_contour_spot: bool = False
 
+    # Set by the app from the active license: a Personnel/unlicensed job stamps
+    # a discreet mark on its sheets. Lives here because sheet generation runs
+    # in a worker process, with no access to the licensing singleton.
+    watermark_text: str = ""
+
     def plotter_reserve_mm(self) -> float:
         """Margin the nesting must reserve so no pose collides with the ARMS
         marks (mark inset + arm length + quiet zone for reliable sensing)."""

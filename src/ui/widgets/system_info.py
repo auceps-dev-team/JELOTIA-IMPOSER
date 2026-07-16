@@ -5,11 +5,14 @@ import sys
 from pathlib import Path
 
 from PySide6.QtWidgets import (
+    QFileDialog,
     QFormLayout,
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
+    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -102,6 +105,7 @@ class SystemInfoWidget(QWidget):
         self._add_row(db_form, "db_size", "Taille du fichier")
 
         outer.addLayout(grid, 1)
+        outer.addWidget(self._build_license_panel())
 
         actions = QHBoxLayout()
         self.btn_open_folder = QPushButton("[OUVRIR LE DOSSIER HOTFOLDER]")
@@ -112,6 +116,96 @@ class SystemInfoWidget(QWidget):
         actions.addStretch()
         actions.addWidget(self.btn_refresh)
         outer.addLayout(actions)
+
+    def _build_license_panel(self):
+        panel = QFrame()
+        panel.setStyleSheet(
+            f"QFrame {{ background-color:{_T.BG_PANEL}; border:1px solid {_T.BORDER}; }}"
+        )
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(20, 16, 20, 16)
+        layout.setSpacing(8)
+
+        head = QLabel("┌ LICENCE")
+        head.setStyleSheet(
+            f"color:{_T.TEXT_2}; font-weight:600; font-size:12px; "
+            f"letter-spacing:1.5px; border:none;"
+        )
+        layout.addWidget(head)
+
+        self.license_status = QLabel("—")
+        self.license_status.setStyleSheet("font-size:13px; font-weight:600; border:none;")
+        layout.addWidget(self.license_status)
+
+        fp_row = QHBoxLayout()
+        fp_label = QLabel("Empreinte de ce poste :")
+        fp_label.setStyleSheet(f"color:{_T.TEXT_MUTE}; font-size:11px; border:none;")
+        self.fingerprint_value = QLineEdit()
+        self.fingerprint_value.setReadOnly(True)
+        self.btn_copy_fp = QPushButton("Copier")
+        self.btn_copy_fp.clicked.connect(self._copy_fingerprint)
+        fp_row.addWidget(fp_label)
+        fp_row.addWidget(self.fingerprint_value, 1)
+        fp_row.addWidget(self.btn_copy_fp)
+        layout.addLayout(fp_row)
+
+        hint = QLabel(
+            "Communiquez cette empreinte à JELOTIA pour obtenir votre licence, "
+            "puis collez la clé ci-dessous."
+        )
+        hint.setWordWrap(True)
+        hint.setStyleSheet(f"color:{_T.TEXT_DIM}; font-size:11px; border:none;")
+        layout.addWidget(hint)
+
+        act_row = QHBoxLayout()
+        self.license_input = QLineEdit()
+        self.license_input.setPlaceholderText("Coller la clé de licence…")
+        self.btn_activate = QPushButton("[ACTIVER]")
+        self.btn_activate.setObjectName("primary")
+        self.btn_activate.clicked.connect(self._activate_license)
+        self.btn_load_key = QPushButton("Depuis un fichier…")
+        self.btn_load_key.clicked.connect(self._load_license_file)
+        act_row.addWidget(self.license_input, 1)
+        act_row.addWidget(self.btn_load_key)
+        act_row.addWidget(self.btn_activate)
+        layout.addLayout(act_row)
+        return panel
+
+    def _copy_fingerprint(self):
+        from PySide6.QtWidgets import QApplication
+
+        QApplication.clipboard().setText(self.fingerprint_value.text())
+        self.btn_copy_fp.setText("Copié ✓")
+
+    def _activate_license(self):
+        from src.core.licensing import install_license
+
+        key = self.license_input.text().strip()
+        if not key:
+            return
+        result = install_license(key)
+        if not result.valid:
+            QMessageBox.warning(self, "Licence refusée", result.reason)
+            return
+        self.license_input.clear()
+        window = self.window()
+        if hasattr(window, "refresh_license"):
+            window.refresh_license()
+        QMessageBox.information(
+            self, "Licence activée", f"Licence {result.label} active"
+            + (f" — {result.licensee}" if result.licensee else "") + "."
+        )
+        self.refresh()
+
+    def _load_license_file(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Fichier de licence", "", "Clé de licence (*.key *.lic);;Tous (*.*)"
+        )
+        if path:
+            try:
+                self.license_input.setText(Path(path).read_text(encoding="utf-8").strip())
+            except OSError as e:
+                QMessageBox.warning(self, "Erreur", f"Lecture impossible : {e}")
 
     def _panel(self, grid: QGridLayout, row: int, col: int, title: str) -> QFormLayout:
         panel = QFrame()
@@ -195,6 +289,25 @@ class SystemInfoWidget(QWidget):
         db_path = Path(config.db_path)
         size = db_path.stat().st_size / 1024 if db_path.exists() else 0
         self._rows["db_size"].setText(f"{size:,.0f} Ko".replace(",", " "))
+
+        self._refresh_license_panel()
+
+    def _refresh_license_panel(self):
+        from src.core.licensing import current_license, machine_fingerprint
+
+        lic = current_license(refresh=True)
+        self.fingerprint_value.setText(machine_fingerprint())
+        if lic.valid:
+            color = _T.STATE_OK if lic.is_enterprise else _T.ACCENT_TEXT
+            extra = f" — {lic.licensee}" if lic.licensee else ""
+            cap = "illimité" if lic.unlimited_volume else f"{lic.max_files_per_day} fichiers/jour"
+            self.license_status.setText(f"Licence {lic.label}{extra}  ·  {cap}")
+        else:
+            color = _T.STATE_WARN
+            self.license_status.setText(f"Non activé  ·  {lic.reason}")
+        self.license_status.setStyleSheet(
+            f"color:{color}; font-size:13px; font-weight:600; border:none;"
+        )
 
     def _open_base_dir(self):
         from src.utils.config import config

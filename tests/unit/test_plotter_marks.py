@@ -113,6 +113,28 @@ def test_cut_contour_spot_embedded(tmp_path):
     assert b"Separation" in raw, "CutContour doit être une séparation (spot)"
 
 
+def test_watermark_stamped_when_set(tmp_path):
+    settings = JobSettings(
+        watermark_text="NON LICENCIÉ", draw_cutlines=False, add_crop_marks=False,
+        generate_thumbnail=False,
+    )
+    out = LayoutEngine().generate_sheet_pdf(uuid.uuid4(), _sheet(), settings, tmp_path)
+
+    doc = fitz.open(str(out))
+    assert "NON LICENCIÉ" in doc[0].get_text(), "le filigrane doit apparaître sur la planche"
+    doc.close()
+
+
+def test_no_watermark_by_default(tmp_path):
+    settings = JobSettings(
+        draw_cutlines=False, add_crop_marks=False, generate_thumbnail=False
+    )
+    out = LayoutEngine().generate_sheet_pdf(uuid.uuid4(), _sheet(), settings, tmp_path)
+    doc = fitz.open(str(out))
+    assert "LICENCIÉ" not in doc[0].get_text()
+    doc.close()
+
+
 def test_no_marks_by_default(tmp_path):
     settings = JobSettings(
         draw_cutlines=False, add_crop_marks=False, generate_thumbnail=False

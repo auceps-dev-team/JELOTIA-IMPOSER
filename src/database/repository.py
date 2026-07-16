@@ -272,6 +272,29 @@ class DatabaseRepository:
         finally:
             session.close()
 
+    def files_processed_today(self) -> int:
+        """Total source files across jobs created today — drives the Personnel
+        daily volume cap. Counts jobs (including archived) so the cap can't be
+        dodged by archiving."""
+        from datetime import datetime, timezone
+
+        session = self.get_session()
+        try:
+            start = datetime.now(timezone.utc).replace(
+                hour=0, minute=0, second=0, microsecond=0, tzinfo=None
+            )
+            jobs = (
+                session.query(JobModel.source_paths)
+                .filter(JobModel.created_at >= start)
+                .all()
+            )
+            return sum(len(paths or []) for (paths,) in jobs)
+        except SQLAlchemyError as e:
+            logger.error(f"Error counting today's files: {e}")
+            return 0
+        finally:
+            session.close()
+
     def get_system_counts(self) -> Dict[str, int]:
         """Lightweight totals for the system-info screen (SQL COUNTs only)."""
         session = self.get_session()

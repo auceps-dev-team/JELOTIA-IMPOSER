@@ -88,6 +88,9 @@ class LayoutEngine:
         if settings.plotter_marks != "none":
             self._draw_plotter_marks(c, sheet, settings)
 
+        if settings.watermark_text:
+            self._draw_watermark(c, sheet, settings.watermark_text)
+
         if settings.add_qr_code:
             self._draw_qr_code(c, job_id, sheet, settings)
 
@@ -189,6 +192,34 @@ class LayoutEngine:
             vy = y_edge + dy * (near if outward else far)
             c.line(cx * mm, cy * mm, hx * mm, cy * mm)  # horizontal arm
             c.line(cx * mm, cy * mm, cx * mm, vy * mm)  # vertical arm
+
+    # ------------------------------------------------------------------ #
+    #  Licence watermark (Personnel / non activé)                          #
+    # ------------------------------------------------------------------ #
+
+    def _draw_watermark(self, c: canvas.Canvas, sheet: Sheet, text: str) -> None:
+        """A discreet diagonal grey tile across the sheet: visible enough to
+        mark an unlicensed/Personnel output, light enough not to ruin a proof.
+        Drawn under the artwork so it never sits on top of a client's design."""
+        from reportlab.lib.colors import Color
+
+        c.saveState()
+        c.setFillColor(Color(0.5, 0.5, 0.5, alpha=0.12))
+        c.setFont("Helvetica-Bold", 22)
+        step_x = 150 * mm
+        step_y = 90 * mm
+        y = 0.0
+        while y < sheet.height_mm * mm + step_y:
+            x = 0.0
+            while x < sheet.width_mm * mm + step_x:
+                c.saveState()
+                c.translate(x, y)
+                c.rotate(30)
+                c.drawString(0, 0, text)
+                c.restoreState()
+                x += step_x
+            y += step_y
+        c.restoreState()
 
     # ------------------------------------------------------------------ #
     #  CutContour spot overlay                                             #

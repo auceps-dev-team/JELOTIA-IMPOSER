@@ -77,6 +77,10 @@ class MainWindow(QMainWindow):
 
         self.db = DatabaseRepository()
 
+        from src.core.licensing import current_license
+
+        self.license = current_license()
+
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
         self.main_layout = QVBoxLayout(self.central_widget)
@@ -90,6 +94,7 @@ class MainWindow(QMainWindow):
         self.output_manager = OutputManager()
 
         self.setup_status_bar()
+        self._apply_license_to_ui()
         self.setup_system_tray()
         self.setup_worker_pool()
         self.setup_hot_folder_monitor()
@@ -147,6 +152,9 @@ class MainWindow(QMainWindow):
                 config.get("imposition", "plotter_mark_length") or 15.0
             ),
             cut_contour_spot=bool(config.get("export", "cut_contour")),
+            watermark_text=(
+                "JELOTIA IMPOSER — NON LICENCIÉ" if self.license.watermark else ""
+            ),
         )
 
     # Priority labels (JobDialog) -> queue rank (WorkerPoolManager).
@@ -492,6 +500,9 @@ class MainWindow(QMainWindow):
     def _on_job_created(self, job_name: str, file_paths: list, overrides: dict):
         """Called when a manual job is created in the dialog."""
         if file_paths:
+            if not self._volume_check(len(file_paths)):
+                self.jobs_view.remove_job_row(job_name)
+                return
             self._submit_job(job_name, file_paths, overrides=overrides)
         else:
             self._log(f"Job {job_name} créé (aucun fichier — en attente)")
@@ -524,6 +535,57 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ #
     #  Status bar & tray                                                   #
     # ------------------------------------------------------------------ #
+
+    # ------------------------------------------------------------------ #
+    #  Licence enforcement                                                 #
+    # ------------------------------------------------------------------ #
+
+    def _apply_license_to_ui(self) -> None:
+        """Locks the Enterprise-only controls (and explains why) whenever the
+        active license doesn't allow them. Re-run after (de)activation."""
+        gated = (
+            (getattr(self.jobs_view, "btn_gang", None), "ganging"),
+            (getattr(self.dashboard_view, "btn_report", None), "reports"),
+            (getattr(self.settings_view, "btn_watch_rules", None), "watch_rules"),
+        )
+        for button, feature in gated:
+            if button is None:
+                continue
+            allowed = self.license.allows(feature)
+            button.setEnabled(allowed)
+            if not allowed:
+                button.setToolTip("Réservé à la licence Entreprise")
+
+        label = self.license.label
+        if hasattr(self, "_status_context_label"):
+            # Surface the tier in the status bar so it's always visible.
+            self.setWindowTitle(f"JELOTIA IMPOSER — {label}")
+
+    def refresh_license(self) -> None:
+        """Reloads the license after activation and re-applies every gate."""
+        from src.core.licensing import current_license
+
+        self.license = current_license(refresh=True)
+        self._apply_license_to_ui()
+        self._log(f"Licence : {self.license.label}")
+
+    def _volume_check(self, incoming_files: int) -> bool:
+        """True if this job may run under the current daily cap. Enterprise and
+        any unlimited license always pass."""
+        if self.license.unlimited_volume:
+            return True
+        cap = self.license.max_files_per_day
+        already = self.db.files_processed_today()
+        if already + incoming_files > cap:
+            QMessageBox.warning(
+                self, "Plafond journalier atteint",
+                f"Licence {self.license.label} : {cap} fichiers/jour maximum.\n"
+                f"Déjà traités aujourd'hui : {already}. "
+                f"Ce job ({incoming_files}) dépasserait la limite.\n\n"
+                "Passez en licence Entreprise pour un volume illimité.",
+            )
+            return False
+        return True
 
     def _log(self, text: str) -> None:
         """Shows `text` in the status bar and, if the dashboard is already
