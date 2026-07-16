@@ -1,6 +1,6 @@
 [project]
 name = "jelotia-imposer"
-version = "1.32.0"
+version = "1.33.0"
 description = "Logiciel Professionnel d'Imposition Automatique Industrielle"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -23,6 +23,7 @@ dependencies = [
     "sqlalchemy>=2.0.36",
     "watchdog>=6.0.0",
     "openpyxl>=3.1.5",
+    "cryptography>=49.0.0",
 ]
 
 [tool.pytest.ini_options]

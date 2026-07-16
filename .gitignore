@@ -14,3 +14,8 @@ installer/output/
 
 # Real-world field-test datasets (large binary sample files, not source code)
 QRC A7 BADGE 01072026/
+
+# Clés privées de signature de licence — ne JAMAIS committer
+license_signing_key*
+*.b64
+license.key
