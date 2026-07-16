@@ -1,6 +1,6 @@
 [project]
 name = "jelotia-imposer"
-version = "1.35.0"
+version = "1.36.0"
 description = "Logiciel Professionnel d'Imposition Automatique Industrielle"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -54,4 +54,11 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "ruff>=0.15.20",
+]
+# Activation server only — runs on JELOTIA infra, never bundled in the app.
+# Install with: uv sync --group server   (or `uv run --group server ...`)
+server = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.32.0",
+    "httpx>=0.28.0",
 ]

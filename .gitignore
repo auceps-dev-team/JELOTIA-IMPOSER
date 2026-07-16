@@ -19,3 +19,7 @@ QRC A7 BADGE 01072026/
 license_signing_key*
 *.b64
 license.key
+
+# Store de jetons du serveur d'activation (données clients) — ne pas committer
+activation.db
+activation_server/*.db

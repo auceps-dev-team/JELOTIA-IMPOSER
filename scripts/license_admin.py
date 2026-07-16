@@ -21,7 +21,6 @@ import argparse
 import base64
 import re
 import sys
-from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -80,29 +79,22 @@ def _keygen() -> int:
 
 
 def _issue(args) -> int:
-    from src.core.licensing import sign_payload
+    from src.core.licensing import build_signed_license
 
     if not PRIVATE_KEY_FILE.exists():
         print("Aucune clé privée — lancez d'abord : license_admin.py keygen")
         return 1
     private_b64 = PRIVATE_KEY_FILE.read_text(encoding="utf-8").strip()
 
-    payload = {
-        "tier": args.tier,
-        "licensee": args.licensee,
-        "machine_id": args.machine or "",
-        "max_files_per_day": args.max_files,
-        "expires": args.expires or "",
-        "features": [f.strip() for f in (args.features or "").split(",") if f.strip()],
-        "issued": date.today().isoformat(),
-    }
-    payload["sig"] = sign_payload(payload, private_b64)
-
-    import json
-
-    key_text = base64.b64encode(
-        json.dumps(payload, separators=(",", ":")).encode("utf-8")
-    ).decode("ascii")
+    key_text = build_signed_license(
+        private_b64,
+        tier=args.tier,
+        licensee=args.licensee,
+        machine_id=args.machine or "",
+        max_files_per_day=args.max_files,
+        expires=args.expires or "",
+        features=[f.strip() for f in (args.features or "").split(",") if f.strip()],
+    )
 
     out = Path(args.out) if args.out else None
     if out:

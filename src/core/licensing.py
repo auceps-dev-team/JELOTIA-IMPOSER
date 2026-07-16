@@ -168,6 +168,35 @@ def sign_payload(payload: dict, private_key_b64: str) -> str:
     return base64.b64encode(signature).decode("ascii")
 
 
+def build_signed_license(
+    private_key_b64: str,
+    tier: str,
+    licensee: str = "",
+    machine_id: str = "",
+    max_files_per_day: int = 0,
+    expires: str = "",
+    features: Optional[List[str]] = None,
+    issued: Optional[str] = None,
+) -> str:
+    """Vendor side: build a license payload, sign it, and return the base64
+    license key a customer installs. Single source of truth for the payload
+    shape — shared by scripts/license_admin.py and the activation server, so the
+    two can never drift from what parse_license() expects."""
+    payload = {
+        "tier": tier,
+        "licensee": licensee,
+        "machine_id": machine_id or "",
+        "max_files_per_day": int(max_files_per_day or 0),
+        "expires": expires or "",
+        "features": list(features or []),
+        "issued": issued or date.today().isoformat(),
+    }
+    payload["sig"] = sign_payload(payload, private_key_b64)
+    return base64.b64encode(
+        json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    ).decode("ascii")
+
+
 def _verify_signature(data: dict, public_key_b64: str) -> bool:
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
