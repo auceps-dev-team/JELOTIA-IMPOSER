@@ -3,7 +3,7 @@
 ; Usage : ouvrir dans Inno Setup Compiler et cliquer "Compile"
 
 #define AppName      "Jelotia Imposer"
-#define AppVersion   "1.34.0"
+#define AppVersion   "1.35.0"
 #define AppPublisher "Jelotia"
 #define AppURL       "https://www.jelotia.com"
 #define AppExeName   "JelotiaImposer.exe"
@@ -44,6 +44,14 @@ Name: "startmenu";    Description: "Créer un raccourci dans le menu Démarrer";
 [Files]
 ; Main application files (built by PyInstaller)
 Source: "{#BuildDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Licence OEM (pré-activation des machines internes JELOTIA) — optionnelle.
+; Avant de compiler l'installeur, générer le fichier :
+;   uv run python scripts/license_admin.py issue --tier enterprise \
+;       --licensee "JELOTIA SARL" --out installer/license.key
+; Si le fichier est présent, l'app est activée dès le premier lancement (elle
+; lit cette licence à côté de l'exe). Absent, l'installeur se compile quand même
+; et l'app démarre en mode "Non activé". Ce fichier n'est jamais versionné (.gitignore).
+Source: "license.key"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
 [Icons]
 Name: "{group}\{#AppName}";         Filename: "{app}\{#AppExeName}"; IconFilename: "{app}\_internal\jelotia.ico"

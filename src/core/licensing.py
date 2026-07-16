@@ -20,6 +20,7 @@ import base64
 import hashlib
 import json
 import logging
+import sys
 from dataclasses import dataclass, field
 from datetime import date
 from enum import Enum
@@ -56,6 +57,17 @@ def _license_dir() -> Path:
 
 def license_file() -> Path:
     return _license_dir() / "license.key"
+
+
+def bundled_license_file() -> Optional[Path]:
+    """A license shipped next to the executable by the installer (OEM / factory
+    pre-activation for JELOTIA's internal machines). Only meaningful in a frozen
+    build — in that case the installer drops `license.key` beside the .exe so the
+    app is activated on first launch with no manual step. A license the user
+    activates later (stored via license_file()) always takes precedence."""
+    if not getattr(sys, "frozen", False):
+        return None
+    return Path(sys.executable).parent / "license.key"
 
 
 def machine_fingerprint() -> str:
@@ -230,20 +242,32 @@ _cached: Optional[License] = None
 
 
 def current_license(refresh: bool = False) -> License:
-    """The active license, read once from license_file() and cached. Missing
-    or invalid file → restricted unlicensed mode."""
+    """The active license, read once and cached. Resolution order:
+
+    1. a license the user activated in F7 (license_file(), in the data folder);
+    2. the OEM license the installer bundled next to the exe (bundled_license_file()).
+
+    The user copy wins so an operator can always upgrade a pre-installed machine.
+    Missing or invalid on both → restricted unlicensed mode.
+    """
     global _cached
     if _cached is not None and not refresh:
         return _cached
 
-    path = license_file()
-    if not path.exists():
-        _cached = unlicensed("Aucune licence installée")
-        return _cached
-    try:
-        _cached = parse_license(path.read_text(encoding="utf-8"))
-    except OSError as e:
-        _cached = unlicensed(f"Licence illisible : {e}")
+    first_invalid: Optional[License] = None
+    for path in (license_file(), bundled_license_file()):
+        if path is None or not path.exists():
+            continue
+        try:
+            lic = parse_license(path.read_text(encoding="utf-8"))
+        except OSError as e:
+            lic = unlicensed(f"Licence illisible : {e}")
+        if lic.valid:
+            _cached = lic
+            return _cached
+        first_invalid = first_invalid or lic
+
+    _cached = first_invalid or unlicensed("Aucune licence installée")
     return _cached
 
 

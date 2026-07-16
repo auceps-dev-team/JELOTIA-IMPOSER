@@ -1,6 +1,7 @@
 import base64
 import json
 from datetime import date, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -189,3 +190,69 @@ def test_install_rejects_invalid_without_writing(keypair, tmp_path, monkeypatch)
     result = licensing.install_license("clé bidon")
     assert not result.valid
     assert not (tmp_path / "license.key").exists(), "une clé invalide ne doit pas être stockée"
+
+
+# --------------------------------------------------------------------------- #
+#  OEM bundled license (installer pre-activation of internal machines)         #
+# --------------------------------------------------------------------------- #
+
+def _wire_sources(monkeypatch, pub, user_path, bundled_path):
+    monkeypatch.setattr(licensing, "PUBLIC_KEY_B64", pub)
+    monkeypatch.setattr(licensing, "license_file", lambda: user_path)
+    monkeypatch.setattr(licensing, "bundled_license_file", lambda: bundled_path)
+    monkeypatch.setattr(licensing, "_cached", None, raising=False)
+
+
+def test_bundled_license_activates_when_no_user_license(keypair, tmp_path, monkeypatch):
+    """Installer dropped an OEM key beside the exe, user never activated → active."""
+    _priv, pub = keypair
+    user = tmp_path / "user.key"
+    bundled = tmp_path / "bundled.key"
+    bundled.write_text(make_key(keypair, tier="enterprise", licensee="JELOTIA SARL"))
+    _wire_sources(monkeypatch, pub, user, bundled)
+
+    lic = licensing.current_license(refresh=True)
+    assert lic.valid and lic.is_enterprise and lic.licensee == "JELOTIA SARL"
+
+
+def test_user_license_overrides_bundled(keypair, tmp_path, monkeypatch):
+    """An operator can upgrade/override a pre-installed machine via F7."""
+    _priv, pub = keypair
+    user = tmp_path / "user.key"
+    bundled = tmp_path / "bundled.key"
+    user.write_text(make_key(keypair, tier="personal", licensee="Poste 3"))
+    bundled.write_text(make_key(keypair, tier="enterprise", licensee="JELOTIA SARL"))
+    _wire_sources(monkeypatch, pub, user, bundled)
+
+    lic = licensing.current_license(refresh=True)
+    assert lic.valid and not lic.is_enterprise and lic.licensee == "Poste 3"
+
+
+def test_bundled_used_when_user_license_invalid(keypair, tmp_path, monkeypatch):
+    """A stale/expired user license must not shadow a valid OEM license."""
+    _priv, pub = keypair
+    user = tmp_path / "user.key"
+    bundled = tmp_path / "bundled.key"
+    yesterday = (date(2026, 7, 14) - timedelta(days=1)).isoformat()
+    user.write_text(make_key(keypair, tier="personal", expires=yesterday))
+    bundled.write_text(make_key(keypair, tier="enterprise"))
+    _wire_sources(monkeypatch, pub, user, bundled)
+
+    lic = licensing.current_license(refresh=True)
+    assert lic.valid and lic.is_enterprise, "on doit retomber sur la licence OEM valide"
+
+
+def test_no_sources_is_unlicensed(keypair, tmp_path, monkeypatch):
+    _priv, pub = keypair
+    _wire_sources(monkeypatch, pub, tmp_path / "none.key", tmp_path / "nope.key")
+    lic = licensing.current_license(refresh=True)
+    assert not lic.valid and "Aucune licence" in lic.reason
+
+
+def test_bundled_path_only_exists_in_frozen_build(monkeypatch):
+    monkeypatch.delattr(licensing.sys, "frozen", raising=False)
+    assert licensing.bundled_license_file() is None, "pas de licence OEM hors build gelé"
+
+    monkeypatch.setattr(licensing.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(licensing.sys, "executable", r"C:\App\JelotiaImposer.exe")
+    assert licensing.bundled_license_file() == Path(r"C:\App\license.key")
