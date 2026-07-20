@@ -61,7 +61,7 @@ class ExportEngine:
             if fmt in ["PDF/X-1A", "PDF/X-4", "PDF"]:
                 self._export_pdfx(base_pdf_path, final_path, fmt)
             elif fmt in ["TIFF", "JPEG"]:
-                self._export_raster(base_pdf_path, final_path, fmt, settings.export_dpi)
+                self._export_raster(base_pdf_path, final_path, fmt, settings.export_dpi, settings)
             else:
                 logger.warning(f"Unknown export format {fmt}. Defaulting to standard copy.")
                 final_path.write_bytes(base_pdf_path.read_bytes())
@@ -114,14 +114,26 @@ class ExportEngine:
         base_name = _slugify(job_name) if job_name else str(sheet.job_id)[:8]
         final_path = output_dir / f"{base_name}_planche_{sheet.sheet_number:02d}{ext}"
 
+        profile = self._resolve_cmyk_profile(settings)
         with Image.open(existing_path) as img:
             if img.mode != "CMYK":
-                img = img.convert("CMYK")
-            dpi = (settings.export_dpi, settings.export_dpi)
-            if fmt == "TIFF":
-                img.save(final_path, format="TIFF", compression="tiff_lzw", dpi=dpi)
-            else:
-                img.save(final_path, format="JPEG", quality=95, dpi=dpi)
+                # Same rule as _render_cmyk: colorimetric when a profile exists,
+                # never the naive convert() which floods blacks with ink.
+                if profile is not None:
+                    from src.core.engines.icc_engine import convert_image_to_cmyk
+
+                    try:
+                        img = convert_image_to_cmyk(img, profile)
+                    except Exception as e:
+                        logger.error(f"Conversion ICC échouée : {e} — repli approximatif.")
+                        img = img.convert("CMYK")
+                else:
+                    logger.warning("Conversion CMJN sans profil ICC : fichier non balisé.")
+                    img = img.convert("CMYK")
+            elif profile is not None and not img.info.get("icc_profile"):
+                # Already CMYK but untagged — declare the space without re-converting.
+                img.info["icc_profile"] = Path(profile).read_bytes()
+            self._save_raster(img, final_path, fmt, settings.export_dpi)
 
         logger.info(f"Converted {existing_path.name} -> {fmt} at {final_path}")
         return final_path
@@ -184,29 +196,97 @@ class ExportEngine:
             logger.error(f"PDF/X export failed: {e}")
             raise
 
-    def _export_raster(self, input_path: Path, output_path: Path, format_type: str, dpi: int):
+    def _resolve_cmyk_profile(self, settings: Optional[JobSettings]) -> Optional[Path]:
+        """The CMYK profile to convert to AND embed in the exported raster.
+
+        The operator's configured profile wins; otherwise the first CMYK profile
+        installed on the machine. Falling back matters: an untagged CMYK TIFF has
+        no declared colour space, and print software / RIPs reject or mis-read it.
         """
-        Rasterizes the PDF to TIFF or JPEG at the requested DPI in CMYK.
+        configured = getattr(settings, "icc_profile_path", "") or ""
+        if configured and Path(configured).is_file():
+            return Path(configured)
+        try:
+            from src.core.engines.icc_engine import discover_profiles
+
+            found = discover_profiles(cmyk_only=True)
+            if found:
+                logger.info(f"Aucun profil configuré, repli sur {found[0].name}")
+                return found[0].path
+        except Exception as e:  # profile discovery must never break an export
+            logger.debug(f"Découverte de profils ICC impossible : {e}")
+        return None
+
+    def _render_cmyk(self, page, mat, profile: Optional[Path]):
+        """Page -> CMYK PIL image, colour-managed when a profile is available.
+
+        PyMuPDF's csCMYK (like Pillow's convert) is the naive formula: it turns a
+        pure black into ~295 % total ink instead of a clean 100 % K, which a RIP
+        refuses. Going through littleCMS with a real profile fixes both the ink
+        load and the missing colour-space tag.
         """
+        if profile is not None:
+            from src.core.engines.icc_engine import convert_image_to_cmyk
+
+            try:
+                pix = page.get_pixmap(matrix=mat, alpha=False)  # RGB
+                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                return convert_image_to_cmyk(img, profile)
+            except Exception as e:
+                logger.error(
+                    f"Conversion ICC échouée ({Path(profile).name}) : {e} — "
+                    "repli sur la conversion approximative."
+                )
+
+        logger.warning(
+            "Export CMJN sans profil ICC : fichier non balisé et encrage "
+            "approximatif. Choisissez un profil CMJN dans F6·CONFIG."
+        )
+        pix = page.get_pixmap(matrix=mat, colorspace=fitz.csCMYK, alpha=False)
+        return Image.frombytes("CMYK", [pix.width, pix.height], pix.samples)
+
+    def _export_raster(
+        self,
+        input_path: Path,
+        output_path: Path,
+        format_type: str,
+        dpi: int,
+        settings: Optional[JobSettings] = None,
+    ):
+        """
+        Rasterizes the PDF to TIFF or JPEG at the requested DPI in CMYK, colour
+        managed through the destination ICC profile and tagged with it.
+        """
+        doc = None
         try:
             doc = fitz.open(str(input_path))
             if len(doc) == 0:
                 raise ValueError("Source PDF has no pages")
-                
+
             page = doc[0]
             zoom = dpi / 72.0
             mat = fitz.Matrix(zoom, zoom)
-            
-            pix = page.get_pixmap(matrix=mat, colorspace=fitz.csCMYK, alpha=False)
-            img = Image.frombytes("CMYK", [pix.width, pix.height], pix.samples)
-            
-            if format_type == "TIFF":
-                img.save(str(output_path), format="TIFF", compression="tiff_lzw", dpi=(dpi, dpi))
-            elif format_type == "JPEG":
-                img.save(str(output_path), format="JPEG", quality=95, dpi=(dpi, dpi))
-                
-            doc.close()
+
+            profile = self._resolve_cmyk_profile(settings)
+            img = self._render_cmyk(page, mat, profile)
+            self._save_raster(img, output_path, format_type, dpi)
+
             logger.info(f"Exported {format_type} ({dpi} dpi) to {output_path}")
         except Exception as e:
             logger.error(f"Raster export failed: {e}")
             raise
+        finally:
+            if doc is not None:
+                doc.close()
+
+    def _save_raster(self, img, output_path: Path, format_type: str, dpi: int):
+        """Writes the image, embedding its ICC profile so the colour space is
+        declared — the tag print software looks for."""
+        options = {"dpi": (dpi, dpi)}
+        icc = img.info.get("icc_profile")
+        if icc:
+            options["icc_profile"] = icc
+        if format_type == "TIFF":
+            img.save(str(output_path), format="TIFF", compression="tiff_lzw", **options)
+        elif format_type == "JPEG":
+            img.save(str(output_path), format="JPEG", quality=95, **options)
