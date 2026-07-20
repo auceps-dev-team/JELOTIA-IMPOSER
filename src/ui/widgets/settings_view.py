@@ -208,11 +208,20 @@ class SettingsWidget(QWidget):
         tab, layout = self._create_form_tab("Exportation")
 
         self.export_format = self._style_input(QComboBox())
-        self.export_format.addItems(["PDF/X-4", "PDF (Standard)", "TIFF", "JDF"])
+        self.export_format.addItems(["PDF/X-4", "PDF (Standard)", "TIFF", "JDF", "JPEG"])
 
         self.export_dpi = self._style_input(QSpinBox())
         self.export_dpi.setRange(72, 2400)
         self.export_dpi.setValue(300)
+
+        # Compatibility settings
+        self.tiff_compression = self._style_input(QComboBox())
+        self.tiff_compression.addItems(["LZW (Standard)", "Aucune / RAW (Vieux RIPs)"])
+        
+        self.jpeg_color_mode = self._style_input(QComboBox())
+        self.jpeg_color_mode.addItems(["CMJN (Standard)", "RVB (Vieux RIPs)"])
+        
+        self.pdf_rasterize = QCheckBox("Pixelliser les exports PDF (Compatibilité Vieux RIPs - Supprime la découpe)")
 
         self.archive_days = self._style_input(QSpinBox())
         self.archive_days.setRange(1, 365)
@@ -237,6 +246,9 @@ class SettingsWidget(QWidget):
 
         layout.addRow("Format de sortie:", self.export_format)
         layout.addRow("Résolution (DPI):", self.export_dpi)
+        layout.addRow("Compression TIFF:", self.tiff_compression)
+        layout.addRow("Mode Couleur JPEG:", self.jpeg_color_mode)
+        layout.addRow("", self.pdf_rasterize)
         layout.addRow("Archiver pendant (jours):", self.archive_days)
         layout.addRow("", self.enable_notifications)
         layout.addRow("Profil ICC (CMJN):", icc_row)
@@ -406,6 +418,14 @@ class SettingsWidget(QWidget):
             if idx >= 0: self.export_format.setCurrentIndex(idx)
         self.export_dpi.setValue(self.config.get("export", "dpi") or 300)
         self.cut_contour.setChecked(self.config.get("export", "cut_contour") or False)
+        
+        tiff_comp = self.config.get("export", "tiff_compression") or "tiff_lzw"
+        self.tiff_compression.setCurrentIndex(0 if tiff_comp == "tiff_lzw" else 1)
+        
+        jpeg_cm = self.config.get("export", "jpeg_color_mode") or "CMYK"
+        self.jpeg_color_mode.setCurrentIndex(0 if jpeg_cm == "CMYK" else 1)
+        
+        self.pdf_rasterize.setChecked(self.config.get("export", "pdf_rasterize") or False)
 
         # Output & Archive
         self.archive_days.setValue(self.config.get("output", "archive_days") or 15)
@@ -464,6 +484,10 @@ class SettingsWidget(QWidget):
         self.config.set("export", "format", self.export_format.currentText())
         self.config.set("export", "dpi", self.export_dpi.value())
         self.config.set("export", "cut_contour", self.cut_contour.isChecked())
+        
+        self.config.set("export", "tiff_compression", "tiff_lzw" if self.tiff_compression.currentIndex() == 0 else "raw")
+        self.config.set("export", "jpeg_color_mode", "CMYK" if self.jpeg_color_mode.currentIndex() == 0 else "RGB")
+        self.config.set("export", "pdf_rasterize", self.pdf_rasterize.isChecked())
 
         # Output & Archive
         self.config.set("output", "archive_days", self.archive_days.value())

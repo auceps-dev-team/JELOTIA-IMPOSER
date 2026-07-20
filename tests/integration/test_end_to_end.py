@@ -91,15 +91,22 @@ async def test_end_to_end_worker_pool(temp_dirs):
     final_sheets = []
     
     def on_job_completed(jid, result, error):
-        nonlocal final_items, final_sheets
+        nonlocal final_items
         if error:
             print(f"Job failed: {error}")
-        items, sheets = result
-        final_items = items
-        final_sheets = sheets
+        final_items = result
+        # Submit the finalization job
+        asyncio.create_task(pool.submit_finalize_job(jid, result, settings))
+        
+    def on_finalize_completed(jid, result, error):
+        nonlocal final_sheets
+        if error:
+            print(f"Finalize failed: {error}")
+        final_sheets = result
         completion_event.set()
         
     pool.on_job_completed = on_job_completed
+    pool.on_finalize_completed = on_finalize_completed
     
     await pool.submit_job(job_id, files, settings)
     

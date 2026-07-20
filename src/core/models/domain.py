@@ -71,6 +71,11 @@ class JobSettings(BaseModel):
     export_dpi: int = 300
     draw_cutlines: bool = True
     add_crop_marks: bool = True
+    
+    # Legacy RIP compatibility settings
+    tiff_compression: str = "tiff_lzw"
+    jpeg_color_mode: str = "CMYK"
+    pdf_rasterize: bool = False
 
     # Layout extras
     add_qr_code: bool = False

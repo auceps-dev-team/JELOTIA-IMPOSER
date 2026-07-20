@@ -59,7 +59,16 @@ class ExportEngine:
 
         try:
             if fmt in ["PDF/X-1A", "PDF/X-4", "PDF"]:
-                self._export_pdfx(base_pdf_path, final_path, fmt)
+                if getattr(settings, "pdf_rasterize", False):
+                    # Render as CMYK raster and wrap for older RIPs (removes transparencies)
+                    tmp_raster = output_dir / f"temp_raster_{job_id_str}_{sheet.sheet_number:02d}.tiff"
+                    self._export_raster(base_pdf_path, tmp_raster, "TIFF", settings.export_dpi, settings)
+                    wrapped = self._wrap_raster_as_pdf(tmp_raster, sheet)
+                    self._export_pdfx(wrapped, final_path, fmt)
+                    tmp_raster.unlink(missing_ok=True)
+                    wrapped.unlink(missing_ok=True)
+                else:
+                    self._export_pdfx(base_pdf_path, final_path, fmt)
             elif fmt in ["TIFF", "JPEG"]:
                 self._export_raster(base_pdf_path, final_path, fmt, settings.export_dpi, settings)
             else:
@@ -133,7 +142,7 @@ class ExportEngine:
             elif profile is not None and not img.info.get("icc_profile"):
                 # Already CMYK but untagged — declare the space without re-converting.
                 img.info["icc_profile"] = Path(profile).read_bytes()
-            self._save_raster(img, final_path, fmt, settings.export_dpi)
+            self._save_raster(img, final_path, fmt, settings.export_dpi, settings)
 
         logger.info(f"Converted {existing_path.name} -> {fmt} at {final_path}")
         return final_path
@@ -269,7 +278,7 @@ class ExportEngine:
 
             profile = self._resolve_cmyk_profile(settings)
             img = self._render_cmyk(page, mat, profile)
-            self._save_raster(img, output_path, format_type, dpi)
+            self._save_raster(img, output_path, format_type, dpi, settings)
 
             logger.info(f"Exported {format_type} ({dpi} dpi) to {output_path}")
         except Exception as e:
@@ -279,14 +288,23 @@ class ExportEngine:
             if doc is not None:
                 doc.close()
 
-    def _save_raster(self, img, output_path: Path, format_type: str, dpi: int):
+    def _save_raster(self, img, output_path: Path, format_type: str, dpi: int, settings: Optional[JobSettings] = None):
         """Writes the image, embedding its ICC profile so the colour space is
         declared — the tag print software looks for."""
         options = {"dpi": (dpi, dpi)}
         icc = img.info.get("icc_profile")
         if icc:
             options["icc_profile"] = icc
+            
         if format_type == "TIFF":
-            img.save(str(output_path), format="TIFF", compression="tiff_lzw", **options)
+            compression = getattr(settings, "tiff_compression", "tiff_lzw") if settings else "tiff_lzw"
+            if compression == "raw":
+                img.save(str(output_path), format="TIFF", compression=None, **options)
+            else:
+                img.save(str(output_path), format="TIFF", compression=compression, **options)
         elif format_type == "JPEG":
+            jpeg_color = getattr(settings, "jpeg_color_mode", "CMYK") if settings else "CMYK"
+            if jpeg_color == "RGB" and img.mode == "CMYK":
+                img = img.convert("RGB")
+                options.pop("icc_profile", None)  # RGB doesn't use the CMYK profile
             img.save(str(output_path), format="JPEG", quality=95, **options)
