@@ -43,6 +43,8 @@ a = Analysis(
     binaries=[],
     datas=[
         ("../config.json", "."),
+        ("../pyproject.toml", "."),
+        ("../src/_version.py", "src"),
         ("../src/database/migrations", "src/database/migrations"),
         ("jelotia.ico", "."),
     ],
