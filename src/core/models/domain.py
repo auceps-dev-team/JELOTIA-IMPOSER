@@ -74,6 +74,7 @@ class JobSettings(BaseModel):
     
     # Legacy RIP compatibility settings
     tiff_compression: str = "tiff_lzw"
+    tiff_photoshop_compat: bool = False
     jpeg_color_mode: str = "CMYK"
     pdf_rasterize: bool = False
 

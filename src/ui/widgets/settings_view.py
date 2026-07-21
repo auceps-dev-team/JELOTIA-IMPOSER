@@ -218,6 +218,8 @@ class SettingsWidget(QWidget):
         self.tiff_compression = self._style_input(QComboBox())
         self.tiff_compression.addItems(["LZW (Standard)", "Aucune / RAW (Vieux RIPs)"])
         
+        self.tiff_photoshop_compat = QCheckBox("Mode compatibilité TIFF Photoshop (Predictor 2, RowsPerStrip 4, sans ICC)")
+        
         self.jpeg_color_mode = self._style_input(QComboBox())
         self.jpeg_color_mode.addItems(["CMJN (Standard)", "RVB (Vieux RIPs)"])
         
@@ -247,6 +249,7 @@ class SettingsWidget(QWidget):
         layout.addRow("Format de sortie:", self.export_format)
         layout.addRow("Résolution (DPI):", self.export_dpi)
         layout.addRow("Compression TIFF:", self.tiff_compression)
+        layout.addRow("", self.tiff_photoshop_compat)
         layout.addRow("Mode Couleur JPEG:", self.jpeg_color_mode)
         layout.addRow("", self.pdf_rasterize)
         layout.addRow("Archiver pendant (jours):", self.archive_days)
@@ -422,6 +425,8 @@ class SettingsWidget(QWidget):
         tiff_comp = self.config.get("export", "tiff_compression") or "tiff_lzw"
         self.tiff_compression.setCurrentIndex(0 if tiff_comp == "tiff_lzw" else 1)
         
+        self.tiff_photoshop_compat.setChecked(self.config.get("export", "tiff_photoshop_compat") or False)
+        
         jpeg_cm = self.config.get("export", "jpeg_color_mode") or "CMYK"
         self.jpeg_color_mode.setCurrentIndex(0 if jpeg_cm == "CMYK" else 1)
         
@@ -486,6 +491,7 @@ class SettingsWidget(QWidget):
         self.config.set("export", "cut_contour", self.cut_contour.isChecked())
         
         self.config.set("export", "tiff_compression", "tiff_lzw" if self.tiff_compression.currentIndex() == 0 else "raw")
+        self.config.set("export", "tiff_photoshop_compat", self.tiff_photoshop_compat.isChecked())
         self.config.set("export", "jpeg_color_mode", "CMYK" if self.jpeg_color_mode.currentIndex() == 0 else "RGB")
         self.config.set("export", "pdf_rasterize", self.pdf_rasterize.isChecked())
 

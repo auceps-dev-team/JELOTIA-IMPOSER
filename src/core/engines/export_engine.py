@@ -298,9 +298,20 @@ class ExportEngine:
             
         if format_type == "TIFF":
             compression = getattr(settings, "tiff_compression", "tiff_lzw") if settings else "tiff_lzw"
+            photoshop_compat = getattr(settings, "tiff_photoshop_compat", False) if settings else False
+
             if compression == "raw":
                 img.save(str(output_path), format="TIFF", compression=None, **options)
             else:
+                if photoshop_compat:
+                    from PIL import TiffImagePlugin
+                    tiffinfo = TiffImagePlugin.ImageFileDirectory_v2()
+                    tiffinfo[317] = 2  # Predictor: Horizontal Differencing
+                    tiffinfo[278] = 4  # RowsPerStrip: 4
+                    # Don't embed ICC to prevent choking old RIPs if compat mode is on
+                    options.pop("icc_profile", None)
+                    options["tiffinfo"] = tiffinfo
+
                 img.save(str(output_path), format="TIFF", compression=compression, **options)
         elif format_type == "JPEG":
             jpeg_color = getattr(settings, "jpeg_color_mode", "CMYK") if settings else "CMYK"
