@@ -56,7 +56,7 @@ def test_regenerate_and_export_multiple_formats(tmp_path, temp_pdf):
     d.close()
 
     tiff_path = results["TIFF"]
-    assert tiff_path.name == "client_x_planche_01.tiff"
+    assert tiff_path.name == "client_x_planche_01.tif"
     with Image.open(tiff_path) as img:
         assert img.mode == "CMYK"
 
@@ -120,7 +120,7 @@ def test_convert_and_export_does_not_need_source_artwork(tmp_path, temp_pdf):
     sheet.export_path = ExportEngine().export_sheet(
         job_id, sheet, base_pdf, settings, tmp_path / "orig", job_name="Client X"
     )
-    assert sheet.export_path.suffix == ".tiff"
+    assert sheet.export_path.suffix == ".tif"
 
     temp_pdf.unlink()  # the original artwork is gone; convert_and_export must not need it
 

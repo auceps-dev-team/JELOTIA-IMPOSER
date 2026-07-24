@@ -59,7 +59,7 @@ def test_export_tiff(export_engine, base_pdf_path, output_dir):
     result_path = export_engine.export_sheet(job_id, sheet, base_pdf_path, settings, output_dir)
 
     assert result_path.exists()
-    assert result_path.suffix == ".tiff"
+    assert result_path.suffix == ".tif"
 
     # Verify TIFF properties
     with Image.open(result_path) as img:
@@ -97,6 +97,37 @@ def black_pdf_path(tmp_path):
     doc.save(str(pdf_path))
     doc.close()
     return pdf_path
+
+
+@needs_profile
+def test_pdfx_embeds_its_output_profile(export_engine, base_pdf_path, output_dir):
+    """PDF/X requires the output condition's ICC profile to be embedded as
+    /DestOutputProfile. Declaring FOGRA39 without shipping the profile makes the
+    file non-conformant and preflight tools reject it."""
+    settings = JobSettings(export_format="PDF/X-1a", icc_profile_path=str(_CMYK_PROFILE))
+    result = export_engine.export_sheet(uuid4(), Sheet(job_id=uuid4(), sheet_number=1),
+                                        base_pdf_path, settings, output_dir)
+
+    with pikepdf.Pdf.open(result) as pdf:
+        intent = pdf.Root.OutputIntents[0]
+        assert "/DestOutputProfile" in intent, "le profil ICC doit être embarqué"
+        assert int(intent["/DestOutputProfile"]["/N"]) == 4, "CMJN = 4 composantes"
+        assert len(intent["/DestOutputProfile"].read_bytes()) > 100
+
+
+def test_pdfx_without_any_profile_still_exports(export_engine, base_pdf_path,
+                                                output_dir, monkeypatch):
+    """No profile on the machine must degrade to a plain PDF/X, not crash."""
+    monkeypatch.setattr(
+        "src.core.engines.icc_engine.discover_profiles", lambda cmyk_only=True: []
+    )
+    settings = JobSettings(export_format="PDF/X-4", icc_profile_path="")
+    result = export_engine.export_sheet(uuid4(), Sheet(job_id=uuid4(), sheet_number=1),
+                                        base_pdf_path, settings, output_dir)
+
+    with pikepdf.Pdf.open(result) as pdf:
+        assert "/OutputIntents" in pdf.Root
+        assert pdf.docinfo["/GTS_PDFXVersion"] == "PDF/X-4"
 
 
 @needs_profile
@@ -249,7 +280,7 @@ def test_export_filename_uses_job_name(export_engine, base_pdf_path, output_dir)
         job_id, sheet, base_pdf_path, settings, output_dir, job_name="Client Projet X"
     )
 
-    assert result_path.name == "client_projet_x_planche_03.tiff"
+    assert result_path.name == "client_projet_x_planche_03.tif"
 
 
 def test_export_filename_falls_back_to_job_id(export_engine, base_pdf_path, output_dir):
@@ -259,7 +290,7 @@ def test_export_filename_falls_back_to_job_id(export_engine, base_pdf_path, outp
 
     result_path = export_engine.export_sheet(job_id, sheet, base_pdf_path, settings, output_dir)
 
-    assert result_path.name == f"{str(job_id)[:8]}_planche_01.tiff"
+    assert result_path.name == f"{str(job_id)[:8]}_planche_01.tif"
 
 
 @patch("src.core.engines.export_engine.fitz.open")

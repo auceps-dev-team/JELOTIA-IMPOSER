@@ -18,6 +18,18 @@ _RASTER_EXTS = {".tiff", ".tif", ".jpg", ".jpeg"}
 logger = logging.getLogger(__name__)
 
 
+def _software_tag() -> str:
+    """Value for the TIFF Software tag. Names this application honestly — some
+    RIPs log it, and claiming to be another vendor's product would be a lie
+    about the file's provenance."""
+    try:
+        from src._version import __version__
+
+        return f"Jelotia Imposer {__version__}"
+    except Exception:
+        return "Jelotia Imposer"
+
+
 def _slugify(name: str) -> str:
     """Lowercase, filesystem-safe slug: spaces/special chars collapse to '_'."""
     slug = re.sub(r"[^a-zA-Z0-9]+", "_", name.strip()).strip("_").lower()
@@ -49,7 +61,9 @@ class ExportEngine:
         fmt = settings.export_format.upper()
         ext = ".pdf"
         if fmt == "TIFF":
-            ext = ".tiff"
+            # Three letters, like Photoshop: legacy import filters (Maintop and
+            # other older RIPs) match on "*.tif" and never see a ".tiff" file.
+            ext = ".tif"
         elif fmt == "JPEG":
             ext = ".jpg"
 
@@ -64,11 +78,11 @@ class ExportEngine:
                     tmp_raster = output_dir / f"temp_raster_{job_id_str}_{sheet.sheet_number:02d}.tiff"
                     self._export_raster(base_pdf_path, tmp_raster, "TIFF", settings.export_dpi, settings)
                     wrapped = self._wrap_raster_as_pdf(tmp_raster, sheet)
-                    self._export_pdfx(wrapped, final_path, fmt)
+                    self._export_pdfx(wrapped, final_path, fmt, settings)
                     tmp_raster.unlink(missing_ok=True)
                     wrapped.unlink(missing_ok=True)
                 else:
-                    self._export_pdfx(base_pdf_path, final_path, fmt)
+                    self._export_pdfx(base_pdf_path, final_path, fmt, settings)
             elif fmt in ["TIFF", "JPEG"]:
                 self._export_raster(base_pdf_path, final_path, fmt, settings.export_dpi, settings)
             else:
@@ -119,7 +133,7 @@ class ExportEngine:
     ) -> Path:
         output_dir.mkdir(parents=True, exist_ok=True)
         fmt = settings.export_format.upper()
-        ext = ".tiff" if fmt == "TIFF" else ".jpg"
+        ext = ".tif" if fmt == "TIFF" else ".jpg"
         base_name = _slugify(job_name) if job_name else str(sheet.job_id)[:8]
         final_path = output_dir / f"{base_name}_planche_{sheet.sheet_number:02d}{ext}"
 
@@ -163,7 +177,13 @@ class ExportEngine:
         doc.close()
         return tmp_path
 
-    def _export_pdfx(self, input_path: Path, output_path: Path, format_type: str):
+    def _export_pdfx(
+        self,
+        input_path: Path,
+        output_path: Path,
+        format_type: str,
+        settings: Optional[JobSettings] = None,
+    ):
         """
         Modifies the base PDF to include PDF/X metadata using pikepdf.
         Note: Perfect transparency flattening for PDF/X-1a is complex and not fully implemented here.
@@ -176,17 +196,35 @@ class ExportEngine:
                     meta["dc:title"] = f"Sheet Export {output_path.stem}"
                     meta["dc:creator"] = ["Jelotia Imposer"]
                     meta["xmp:CreateDate"] = datetime.now().isoformat()
-                    
+
                 # Setup OutputIntent for PDF/X
                 output_intents = pikepdf.Array()
-                
+
+                profile = self._resolve_cmyk_profile(settings)
+                condition, info = self._output_condition(profile)
                 intent_dict = pikepdf.Dictionary({
                     "/Type": pikepdf.Name("/OutputIntent"),
                     "/S": pikepdf.Name("/GTS_PDFX"),
-                    "/OutputConditionIdentifier": "FOGRA39",
+                    "/OutputConditionIdentifier": condition,
                     "/RegistryName": "http://www.color.org",
-                    "/Info": "FOGRA39 (ISO 12647-2:2004)"
+                    "/Info": info,
                 })
+                # PDF/X requires the output condition's ICC profile to be
+                # EMBEDDED as /DestOutputProfile. Declaring a condition without
+                # shipping the profile makes the file non-conformant, and
+                # preflight tools and RIPs reject it on that alone.
+                if profile is not None:
+                    try:
+                        stream = pdf.make_stream(Path(profile).read_bytes())
+                        stream["/N"] = 4  # CMYK components
+                        intent_dict["/DestOutputProfile"] = stream
+                    except Exception as e:
+                        logger.error(f"Profil ICC non embarqué dans le PDF/X : {e}")
+                else:
+                    logger.warning(
+                        "PDF/X sans profil ICC embarqué : fichier non conforme. "
+                        "Choisissez un profil CMJN dans F6·CONFIG."
+                    )
                 output_intents.append(intent_dict)
                 pdf.Root.OutputIntents = output_intents
 
@@ -225,6 +263,24 @@ class ExportEngine:
         except Exception as e:  # profile discovery must never break an export
             logger.debug(f"Découverte de profils ICC impossible : {e}")
         return None
+
+    def _output_condition(self, profile: Optional[Path]) -> tuple:
+        """(OutputConditionIdentifier, /Info) describing the intended press.
+
+        Derived from the profile actually used, so the PDF stops claiming
+        FOGRA39 when the operator selected something else entirely.
+        """
+        if profile is not None:
+            try:
+                from src.core.engines.icc_engine import read_profile
+
+                info = read_profile(Path(profile))
+                if info is not None and info.name:
+                    return info.name, info.name
+            except Exception as e:
+                logger.debug(f"Description du profil illisible : {e}")
+            return Path(profile).stem, Path(profile).stem
+        return "FOGRA39", "FOGRA39 (ISO 12647-2:2004)"
 
     def _render_cmyk(self, page, mat, profile: Optional[Path]):
         """Page -> CMYK PIL image, colour-managed when a profile is available.
@@ -297,22 +353,20 @@ class ExportEngine:
             options["icc_profile"] = icc
             
         if format_type == "TIFF":
+            from src.core.engines.photoshop_tiff import save_tiff
+
             compression = getattr(settings, "tiff_compression", "tiff_lzw") if settings else "tiff_lzw"
+            # Compat mode drops the ICC tag for decoders that choke on it; the
+            # baseline CMYK tags (InkSet/NumberOfInks) are always written.
             photoshop_compat = getattr(settings, "tiff_photoshop_compat", False) if settings else False
-
-            if compression == "raw":
-                img.save(str(output_path), format="TIFF", compression=None, **options)
-            else:
-                if photoshop_compat:
-                    from PIL import TiffImagePlugin
-                    tiffinfo = TiffImagePlugin.ImageFileDirectory_v2()
-                    tiffinfo[317] = 2  # Predictor: Horizontal Differencing
-                    tiffinfo[278] = 4  # RowsPerStrip: 4
-                    # Don't embed ICC to prevent choking old RIPs if compat mode is on
-                    options.pop("icc_profile", None)
-                    options["tiffinfo"] = tiffinfo
-
-                img.save(str(output_path), format="TIFF", compression=compression, **options)
+            save_tiff(
+                img,
+                output_path,
+                dpi,
+                compression=compression,
+                software=_software_tag(),
+                icc_profile=None if photoshop_compat else icc,
+            )
         elif format_type == "JPEG":
             jpeg_color = getattr(settings, "jpeg_color_mode", "CMYK") if settings else "CMYK"
             if jpeg_color == "RGB" and img.mode == "CMYK":

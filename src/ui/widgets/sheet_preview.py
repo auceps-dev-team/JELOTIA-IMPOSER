@@ -350,7 +350,7 @@ class SheetPreviewWidget(QWidget):
     # change it in Settings first: label -> (export_format for ExportEngine, extension, file filter).
     _FORMAT_CHOICES = {
         "PDF": ("PDF", ".pdf", "PDF Files (*.pdf)"),
-        "TIFF": ("TIFF", ".tiff", "TIFF Files (*.tiff)"),
+        "TIFF": ("TIFF", ".tif", "TIFF Files (*.tif *.tiff)"),
         "JPEG": ("JPEG", ".jpg", "JPEG Files (*.jpg)"),
     }
 
