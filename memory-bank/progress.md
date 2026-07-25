@@ -6,6 +6,8 @@
 - Domain vs. Database separation defined.
 - Phase 0 to Phase 4 (Architecture, Core Engines, GUI, Automation).
 - Phase 5: Export Engine & Intégration RIP (PDF/X, TIFF, JPEG support, XML Job Tickets).
+- Documentation: Redédaction complète d'un README.md entreprise hyper-détaillé selon le standard MastodonAffiliate (Badges, Table des matières, Architectures, Engin Preflight/Nesting/Export/Repères, Stack, Quick Start uv, et FAQ).
+
 
 ## Current Task: Phase 6 Continuation (Tests, QA & Performance)
 #### Tests unitaires
