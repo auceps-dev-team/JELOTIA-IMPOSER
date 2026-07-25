@@ -1,9 +1,6 @@
-<p align="center">
-  <img src="public/images/jelotia-imposer-logo.png" alt="Jelotia Imposer Logo" width="420" />
-</p>
 
 <p align="center">
-  <h1 align="center">🖨️ JELOTIA IMPOSER</h1>
+  <img src="public/images/jelotia-imposer-logo.png" alt="Jelotia Imposer Logo" width="420" />
   <p align="center">
     <strong>Le Logiciel Professionnel d'Imposition Automatique Industrielle & Pré-Presse Haute Cadence pour l'Impression Numérique & le Grand Format</strong>
   </p>
