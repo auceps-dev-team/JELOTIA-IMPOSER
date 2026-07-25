@@ -218,6 +218,12 @@ class MainWindow(QMainWindow):
             settings.sheet_width_mm = overrides["sheet_width_mm"]
         if overrides.get("sheet_height_mm"):
             settings.sheet_height_mm = overrides["sheet_height_mm"]
+        # Per-job target file size. Truthy-only so a job left at "origine" (0)
+        # never wipes a size the selected gamme already carries.
+        if overrides.get("target_file_width_mm"):
+            settings.target_file_width_mm = overrides["target_file_width_mm"]
+        if overrides.get("target_file_height_mm"):
+            settings.target_file_height_mm = overrides["target_file_height_mm"]
         self._job_settings[job_name] = settings
 
         priority_label = overrides.get("priority") or "Normale"

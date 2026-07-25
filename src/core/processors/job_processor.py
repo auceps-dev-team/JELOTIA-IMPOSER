@@ -69,6 +69,34 @@ def _persist_sheet_sources(sheets: List[Sheet], job_temp_dir: Path, job_id: UUID
             item.source_path = dest
 
 
+def apply_target_size(item: FileItem, settings: JobSettings) -> None:
+    """Forces the artwork's placement footprint to the target product size set
+    on the gamme / job, in place, before nesting.
+
+    Placing the pose at this size and letting the layout scale the source into
+    it is exactly what a manual resize after imposition does (see
+    SheetEditor.resize_to), so the pre- and post-imposition paths behave
+    identically by construction — no change to stamping is needed.
+
+    A target axis <= 0 leaves that axis at the file's natural size (0/0 = off).
+    The DPI is rescaled to the effective printed resolution (worst axis) so an
+    enlarged file still trips the min_dpi preflight warning at its printed size.
+    """
+    tw = settings.target_file_width_mm
+    th = settings.target_file_height_mm
+    if tw <= 0 and th <= 0:
+        return
+    if item.width_mm <= 0 or item.height_mm <= 0:
+        return
+
+    new_w = tw if tw > 0 else item.width_mm
+    new_h = th if th > 0 else item.height_mm
+    ratio = min(item.width_mm / new_w, item.height_mm / new_h)
+    item.dpi = max(1, int(round(item.dpi * ratio)))
+    item.width_mm = new_w
+    item.height_mm = new_h
+
+
 def _apply_bleed(item: FileItem, settings: JobSettings, work_dir: Path) -> None:
     """Gives `item` the configured bleed, in place.
 
@@ -171,6 +199,11 @@ def process_job_files(
                     # Item is already corrupted during import
                     processed_items.append(item)
                     continue
+
+                # 1b. Resize to the target product size (gamme / job) BEFORE
+                # validating, so preflight judges the printed pose — its size
+                # against the sheet and its effective DPI — not the raw file.
+                apply_target_size(item, settings)
 
                 # 2. Preflight (Validates the item)
                 item = preflight_engine.run_preflight(item, settings)

@@ -98,6 +98,24 @@ class PresetManagerDialog(QDialog):
         dims.addStretch()
         form.addRow("Planche :", dims)
 
+        # Target finished size forced on every file before imposition.
+        # 0 = keep the file's natural size (shown as "origine").
+        self.target_w = QDoubleSpinBox()
+        self.target_w.setRange(0.0, 5000.0)
+        self.target_w.setDecimals(1)
+        self.target_w.setSpecialValueText("origine")
+        self.target_h = QDoubleSpinBox()
+        self.target_h.setRange(0.0, 5000.0)
+        self.target_h.setDecimals(1)
+        self.target_h.setSpecialValueText("origine")
+        target_dims = QHBoxLayout()
+        target_dims.addWidget(self.target_w)
+        target_dims.addWidget(QLabel("×"))
+        target_dims.addWidget(self.target_h)
+        target_dims.addWidget(QLabel("mm"))
+        target_dims.addStretch()
+        form.addRow("Taille fichiers :", target_dims)
+
         self.gap = QDoubleSpinBox()
         self.gap.setRange(0.0, 100.0)
         self.gap.setSuffix(" mm")
@@ -176,6 +194,8 @@ class PresetManagerDialog(QDialog):
         self.support_input.setText(self.current.support)
         self.sheet_w.setValue(int(settings.sheet_width_mm))
         self.sheet_h.setValue(int(settings.sheet_height_mm))
+        self.target_w.setValue(settings.target_file_width_mm)
+        self.target_h.setValue(settings.target_file_height_mm)
         self.gap.setValue(settings.gap_mm)
         self.margin.setValue(settings.margin_mm)
         self.rotation.setChecked(settings.allow_rotation)
@@ -199,6 +219,8 @@ class PresetManagerDialog(QDialog):
         settings = preset.settings
         self.sheet_w.setValue(int(settings.sheet_width_mm))
         self.sheet_h.setValue(int(settings.sheet_height_mm))
+        self.target_w.setValue(settings.target_file_width_mm)
+        self.target_h.setValue(settings.target_file_height_mm)
         self.gap.setValue(settings.gap_mm)
         self.margin.setValue(settings.margin_mm)
         self.rotation.setChecked(settings.allow_rotation)
@@ -221,6 +243,8 @@ class PresetManagerDialog(QDialog):
         settings = self.current.settings
         settings.sheet_width_mm = float(self.sheet_w.value())
         settings.sheet_height_mm = float(self.sheet_h.value())
+        settings.target_file_width_mm = self.target_w.value()
+        settings.target_file_height_mm = self.target_h.value()
         settings.gap_mm = self.gap.value()
         settings.margin_mm = self.margin.value()
         settings.allow_rotation = self.rotation.isChecked()

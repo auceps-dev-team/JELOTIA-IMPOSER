@@ -59,6 +59,12 @@ class JobSettings(BaseModel):
     allow_rotation: bool = True
     add_bleed_mm: float = 0.0
 
+    # Target finished size forced on every file BEFORE imposition (same effect
+    # as resizing a pose after layout, but applied up front). 0 on an axis keeps
+    # the artwork's natural size on that axis; 0/0 disables the feature.
+    target_file_width_mm: float = 0.0
+    target_file_height_mm: float = 0.0
+
     # Preflight overrides
     min_dpi: int = 300
     force_cmyk: bool = True

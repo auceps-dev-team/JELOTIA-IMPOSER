@@ -58,6 +58,20 @@ class JobDialog(QDialog):
         self.sheet_height_input.setSpecialValueText("Réglage global")
         self.sheet_height_input.setSuffix(" mm")
 
+        # Target finished size forced on every file before imposition.
+        # 0 = "Taille d'origine" (leave the file as-is on that axis).
+        self.target_width_input = QDoubleSpinBox()
+        self.target_width_input.setRange(0, 5000)
+        self.target_width_input.setDecimals(1)
+        self.target_width_input.setSpecialValueText("Taille d'origine")
+        self.target_width_input.setSuffix(" mm")
+
+        self.target_height_input = QDoubleSpinBox()
+        self.target_height_input.setRange(0, 5000)
+        self.target_height_input.setDecimals(1)
+        self.target_height_input.setSpecialValueText("Taille d'origine")
+        self.target_height_input.setSuffix(" mm")
+
         # Manufacturing preset ("gamme"): one pick applies the product's whole
         # recipe (sheet, spacing, ARMS marks, CutContour, export) to this job.
         preset_row = QHBoxLayout()
@@ -73,6 +87,8 @@ class JobDialog(QDialog):
         form_layout.addRow("Quantité par défaut:", self.quantity_spin)
         form_layout.addRow("Largeur planche (0 = global):", self.sheet_width_input)
         form_layout.addRow("Hauteur planche (0 = global):", self.sheet_height_input)
+        form_layout.addRow("Largeur fichiers (0 = origine):", self.target_width_input)
+        form_layout.addRow("Hauteur fichiers (0 = origine):", self.target_height_input)
         layout.addLayout(form_layout)
         self._reload_presets()
         self.preset_combo.currentIndexChanged.connect(self._on_preset_selected)
@@ -150,6 +166,8 @@ class JobDialog(QDialog):
             if str(preset.id) == preset_id:
                 self.sheet_width_input.setValue(preset.settings.sheet_width_mm)
                 self.sheet_height_input.setValue(preset.settings.sheet_height_mm)
+                self.target_width_input.setValue(preset.settings.target_file_width_mm)
+                self.target_height_input.setValue(preset.settings.target_file_height_mm)
                 return
 
     def _manage_presets(self):
@@ -231,6 +249,8 @@ class JobDialog(QDialog):
             "overrides": {
                 "sheet_width_mm": self.sheet_width_input.value() or None,
                 "sheet_height_mm": self.sheet_height_input.value() or None,
+                "target_file_width_mm": self.target_width_input.value() or None,
+                "target_file_height_mm": self.target_height_input.value() or None,
                 "quantities": quantities,
                 "priority": self.priority_combo.currentText(),
                 "preset_id": self.preset_combo.currentData(),
