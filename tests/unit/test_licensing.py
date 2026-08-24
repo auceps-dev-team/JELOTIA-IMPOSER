@@ -1,7 +1,6 @@
 import base64
 import json
 from datetime import date, timedelta
-from pathlib import Path
 
 import pytest
 
@@ -249,10 +248,18 @@ def test_no_sources_is_unlicensed(keypair, tmp_path, monkeypatch):
     assert not lic.valid and "Aucune licence" in lic.reason
 
 
-def test_bundled_path_only_exists_in_frozen_build(monkeypatch):
+def test_bundled_path_only_exists_in_frozen_build(tmp_path, monkeypatch):
+    """The OEM licence sits next to the executable, and only in a frozen build.
+
+    Uses tmp_path rather than a literal r"C:\\App\\..." : on POSIX a backslash is
+    an ordinary character, so that string had no parent directory and the test
+    failed everywhere except Windows — turning the whole suite red on any Linux
+    runner, which is exactly where the CI runs.
+    """
     monkeypatch.delattr(licensing.sys, "frozen", raising=False)
     assert licensing.bundled_license_file() is None, "pas de licence OEM hors build gelé"
 
+    exe = tmp_path / "JelotiaImposer.exe"
     monkeypatch.setattr(licensing.sys, "frozen", True, raising=False)
-    monkeypatch.setattr(licensing.sys, "executable", r"C:\App\JelotiaImposer.exe")
-    assert licensing.bundled_license_file() == Path(r"C:\App\license.key")
+    monkeypatch.setattr(licensing.sys, "executable", str(exe))
+    assert licensing.bundled_license_file() == tmp_path / "license.key"

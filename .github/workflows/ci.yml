@@ -60,17 +60,27 @@ jobs:
         run: uv sync --group dev --group server
 
       - name: Run tests
-        # -rs lists every skip: a runner with no CMYK ICC profile silently
-        # skips the colour-management and PDF/X tests, and a green run that
-        # skipped them is exactly the false assurance to avoid.
-        run: uv run pytest tests/ -q -rs --durations=10
+        # -rs lists every skip inline: a runner with no CMYK ICC profile
+        # silently skips the colour-management and PDF/X tests, and a green run
+        # that skipped them is exactly the false assurance to avoid. Reported
+        # from THIS run — re-running the suite just to print the list would
+        # double CI time per OS for nothing.
+        shell: bash
+        run: |
+          set -o pipefail
+          uv run pytest tests/ -q -rs --durations=10 2>&1 | tee pytest.log
 
-      - name: Report skipped tests
+      - name: Skipped tests summary
         if: always()
         shell: bash
         run: |
-          uv run pytest tests/ -q -rs 2>&1 | grep -i "^SKIPPED" || \
-            echo "Aucun test sauté sur ${{ matrix.os }}."
+          echo "### Tests sautés — ${{ matrix.os }}" >> "$GITHUB_STEP_SUMMARY"
+          if grep -i "^SKIPPED" pytest.log >> "$GITHUB_STEP_SUMMARY"; then
+            echo "Des tests ont été sautés : un vert obtenu en sautant n'est pas un vert." \
+              >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Aucun." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   coverage:
     name: Coverage

@@ -110,16 +110,21 @@ def test_auto_processor(temp_dirs):
     processor.add_file(str(f2))
     processor.add_file(str(f3))
     
-    # Process events and wait
-    for _ in range(60):
+    # AutoProcessor.run() polls every 5 s (see its loop), so a 6 s budget left
+    # barely one second of margin and the test failed roughly one run in five
+    # under load — enough to make CI red at random. Allow 5x the poll interval;
+    # the loop still exits as soon as the group arrives, so the passing case
+    # stays as fast as before.
+    deadline = time.monotonic() + 25.0
+    while time.monotonic() < deadline and not groups_emitted:
         app.processEvents()
         time.sleep(0.1)
-        if len(groups_emitted) > 0:
-            break
-            
+
     processor.stop()
-    
-    assert len(groups_emitted) > 0
+
+    assert len(groups_emitted) > 0, (
+        "aucun groupe émis en 25 s — AutoProcessor sonde toutes les 5 s"
+    )
     # The 3 files should be grouped into 2 batches due to max_files_per_job=2
     # But since their sizes are (0,0) they are grouped together
     total_files_in_groups = sum(len(fps) for _, fps in groups_emitted)

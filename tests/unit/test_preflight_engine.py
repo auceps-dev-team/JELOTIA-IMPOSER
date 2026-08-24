@@ -246,14 +246,20 @@ def test_preflight_flags_a_non_embedded_font(tmp_path, valid_file_item, default_
     assert item.preflight_status == PreflightStatus.WARNING
 
 
-@pytest.mark.skipif(
-    not Path("C:/Windows/Fonts/arial.ttf").is_file(),
-    reason="aucune police TTF système pour construire le cas embarqué",
-)
+def _libre_ttf() -> str:
+    """A TTF guaranteed present on every platform: Bitstream Vera ships inside
+    reportlab, which is a hard dependency. Beats both a Windows system font
+    (skipped the discriminating half of the check on Linux — i.e. on CI) and
+    vendoring a font file into the repo."""
+    import reportlab
+
+    return str(Path(reportlab.__file__).parent / "fonts" / "Vera.ttf")
+
+
 def test_preflight_accepts_an_embedded_font(tmp_path, valid_file_item, default_settings):
     valid_file_item.format = FileFormat.PDF
     valid_file_item.path = _pdf_with_text(
-        tmp_path, "embedded.pdf", fontfile="C:/Windows/Fonts/arial.ttf"
+        tmp_path, "embedded.pdf", fontfile=_libre_ttf()
     )
 
     item = PreflightEngine().run_preflight(valid_file_item, default_settings)
