@@ -1,0 +1,485 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="3400" height="2680" viewBox="0 0 3400 2680" font-family="'Segoe UI', 'DejaVu Sans', Helvetica, Arial, sans-serif">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#141517"/><stop offset="100%" stop-color="#0E0F11"/></linearGradient>
+<radialGradient id="glow" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#FF7A1A" stop-opacity="0.30"/><stop offset="100%" stop-color="#FF7A1A" stop-opacity="0"/></radialGradient>
+<filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#000" flood-opacity="0.55"/></filter>
+</defs>
+<rect width="3400" height="2680" fill="url(#bg)"/>
+<g stroke="#33363B" stroke-opacity="0.20" stroke-width="1">
+<line x1="0" y1="0" x2="0" y2="2680"/>
+<line x1="60" y1="0" x2="60" y2="2680"/>
+<line x1="120" y1="0" x2="120" y2="2680"/>
+<line x1="180" y1="0" x2="180" y2="2680"/>
+<line x1="240" y1="0" x2="240" y2="2680"/>
+<line x1="300" y1="0" x2="300" y2="2680"/>
+<line x1="360" y1="0" x2="360" y2="2680"/>
+<line x1="420" y1="0" x2="420" y2="2680"/>
+<line x1="480" y1="0" x2="480" y2="2680"/>
+<line x1="540" y1="0" x2="540" y2="2680"/>
+<line x1="600" y1="0" x2="600" y2="2680"/>
+<line x1="660" y1="0" x2="660" y2="2680"/>
+<line x1="720" y1="0" x2="720" y2="2680"/>
+<line x1="780" y1="0" x2="780" y2="2680"/>
+<line x1="840" y1="0" x2="840" y2="2680"/>
+<line x1="900" y1="0" x2="900" y2="2680"/>
+<line x1="960" y1="0" x2="960" y2="2680"/>
+<line x1="1020" y1="0" x2="1020" y2="2680"/>
+<line x1="1080" y1="0" x2="1080" y2="2680"/>
+<line x1="1140" y1="0" x2="1140" y2="2680"/>
+<line x1="1200" y1="0" x2="1200" y2="2680"/>
+<line x1="1260" y1="0" x2="1260" y2="2680"/>
+<line x1="1320" y1="0" x2="1320" y2="2680"/>
+<line x1="1380" y1="0" x2="1380" y2="2680"/>
+<line x1="1440" y1="0" x2="1440" y2="2680"/>
+<line x1="1500" y1="0" x2="1500" y2="2680"/>
+<line x1="1560" y1="0" x2="1560" y2="2680"/>
+<line x1="1620" y1="0" x2="1620" y2="2680"/>
+<line x1="1680" y1="0" x2="1680" y2="2680"/>
+<line x1="1740" y1="0" x2="1740" y2="2680"/>
+<line x1="1800" y1="0" x2="1800" y2="2680"/>
+<line x1="1860" y1="0" x2="1860" y2="2680"/>
+<line x1="1920" y1="0" x2="1920" y2="2680"/>
+<line x1="1980" y1="0" x2="1980" y2="2680"/>
+<line x1="2040" y1="0" x2="2040" y2="2680"/>
+<line x1="2100" y1="0" x2="2100" y2="2680"/>
+<line x1="2160" y1="0" x2="2160" y2="2680"/>
+<line x1="2220" y1="0" x2="2220" y2="2680"/>
+<line x1="2280" y1="0" x2="2280" y2="2680"/>
+<line x1="2340" y1="0" x2="2340" y2="2680"/>
+<line x1="2400" y1="0" x2="2400" y2="2680"/>
+<line x1="2460" y1="0" x2="2460" y2="2680"/>
+<line x1="2520" y1="0" x2="2520" y2="2680"/>
+<line x1="2580" y1="0" x2="2580" y2="2680"/>
+<line x1="2640" y1="0" x2="2640" y2="2680"/>
+<line x1="2700" y1="0" x2="2700" y2="2680"/>
+<line x1="2760" y1="0" x2="2760" y2="2680"/>
+<line x1="2820" y1="0" x2="2820" y2="2680"/>
+<line x1="2880" y1="0" x2="2880" y2="2680"/>
+<line x1="2940" y1="0" x2="2940" y2="2680"/>
+<line x1="3000" y1="0" x2="3000" y2="2680"/>
+<line x1="3060" y1="0" x2="3060" y2="2680"/>
+<line x1="3120" y1="0" x2="3120" y2="2680"/>
+<line x1="3180" y1="0" x2="3180" y2="2680"/>
+<line x1="3240" y1="0" x2="3240" y2="2680"/>
+<line x1="3300" y1="0" x2="3300" y2="2680"/>
+<line x1="3360" y1="0" x2="3360" y2="2680"/>
+<line x1="0" y1="0" x2="3400" y2="0"/>
+<line x1="0" y1="60" x2="3400" y2="60"/>
+<line x1="0" y1="120" x2="3400" y2="120"/>
+<line x1="0" y1="180" x2="3400" y2="180"/>
+<line x1="0" y1="240" x2="3400" y2="240"/>
+<line x1="0" y1="300" x2="3400" y2="300"/>
+<line x1="0" y1="360" x2="3400" y2="360"/>
+<line x1="0" y1="420" x2="3400" y2="420"/>
+<line x1="0" y1="480" x2="3400" y2="480"/>
+<line x1="0" y1="540" x2="3400" y2="540"/>
+<line x1="0" y1="600" x2="3400" y2="600"/>
+<line x1="0" y1="660" x2="3400" y2="660"/>
+<line x1="0" y1="720" x2="3400" y2="720"/>
+<line x1="0" y1="780" x2="3400" y2="780"/>
+<line x1="0" y1="840" x2="3400" y2="840"/>
+<line x1="0" y1="900" x2="3400" y2="900"/>
+<line x1="0" y1="960" x2="3400" y2="960"/>
+<line x1="0" y1="1020" x2="3400" y2="1020"/>
+<line x1="0" y1="1080" x2="3400" y2="1080"/>
+<line x1="0" y1="1140" x2="3400" y2="1140"/>
+<line x1="0" y1="1200" x2="3400" y2="1200"/>
+<line x1="0" y1="1260" x2="3400" y2="1260"/>
+<line x1="0" y1="1320" x2="3400" y2="1320"/>
+<line x1="0" y1="1380" x2="3400" y2="1380"/>
+<line x1="0" y1="1440" x2="3400" y2="1440"/>
+<line x1="0" y1="1500" x2="3400" y2="1500"/>
+<line x1="0" y1="1560" x2="3400" y2="1560"/>
+<line x1="0" y1="1620" x2="3400" y2="1620"/>
+<line x1="0" y1="1680" x2="3400" y2="1680"/>
+<line x1="0" y1="1740" x2="3400" y2="1740"/>
+<line x1="0" y1="1800" x2="3400" y2="1800"/>
+<line x1="0" y1="1860" x2="3400" y2="1860"/>
+<line x1="0" y1="1920" x2="3400" y2="1920"/>
+<line x1="0" y1="1980" x2="3400" y2="1980"/>
+<line x1="0" y1="2040" x2="3400" y2="2040"/>
+<line x1="0" y1="2100" x2="3400" y2="2100"/>
+<line x1="0" y1="2160" x2="3400" y2="2160"/>
+<line x1="0" y1="2220" x2="3400" y2="2220"/>
+<line x1="0" y1="2280" x2="3400" y2="2280"/>
+<line x1="0" y1="2340" x2="3400" y2="2340"/>
+<line x1="0" y1="2400" x2="3400" y2="2400"/>
+<line x1="0" y1="2460" x2="3400" y2="2460"/>
+<line x1="0" y1="2520" x2="3400" y2="2520"/>
+<line x1="0" y1="2580" x2="3400" y2="2580"/>
+<line x1="0" y1="2640" x2="3400" y2="2640"/>
+</g>
+<text x="60" y="76" font-size="40" font-weight="700" fill="#E8EAED" letter-spacing="1.5">CARTE MENTALE — JELOTIA IMPOSER</text>
+<text x="62" y="112" font-size="20" fill="#8B8F96" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">21 651 LOC Python · 9 domaines · 15 moteurs · 17 widgets · audit du 24/08/2026</text>
+<text x="2700" y="60" font-size="17" fill="#8B8F96" font-weight="600">LÉGENDE</text>
+<rect x="2700" y="76" width="14" height="14" rx="3" fill="#4DD97E"/>
+<text x="2724" y="88" font-size="16" fill="#C8CBD0">sain / point fort</text>
+<rect x="2700" y="102" width="14" height="14" rx="3" fill="#FFB35C"/>
+<text x="2724" y="114" font-size="16" fill="#C8CBD0">à surveiller / dette</text>
+<rect x="2700" y="128" width="14" height="14" rx="3" fill="#E5484D"/>
+<text x="2724" y="140" font-size="16" fill="#C8CBD0">défaut critique</text>
+<circle cx="1700.0" cy="1340.0" r="330" fill="url(#glow)"/>
+<rect x="1490.0" y="1235.0" width="420" height="210" rx="24" fill="#1B1D20" stroke="#FF7A1A" stroke-width="3" filter="url(#soft)"/>
+<text x="1700.0" y="1288.0" text-anchor="middle" font-size="17" fill="#FF7A1A" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace" letter-spacing="4">PRÉ-PRESSE AUTOMATISÉ</text>
+<text x="1700.0" y="1334.0" text-anchor="middle" font-size="44" font-weight="800" fill="#E8EAED" letter-spacing="1">JELOTIA</text>
+<text x="1700.0" y="1378.0" text-anchor="middle" font-size="44" font-weight="800" fill="#E8EAED" letter-spacing="1">IMPOSER</text>
+<text x="1700.0" y="1412.0" text-anchor="middle" font-size="16" fill="#8B8F96" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">PySide6 · SQLite · PyMuPDF · v1.38.0</text>
+<path d="M 1490.0 1340.0 C 1422.5 1340.0, 1422.5 562.0, 1340.0 562.0" fill="none" stroke="#FF7A1A" stroke-width="3.5" stroke-opacity="0.85"/>
+<circle cx="1340.0" cy="562.0" r="6" fill="#FF7A1A"/>
+<rect x="160.0" y="523.0" width="1180" height="78" rx="14" fill="#1B1D20" stroke="#FF7A1A" stroke-width="2.5" filter="url(#soft)"/>
+<rect x="160.0" y="523.0" width="7" height="78" rx="3.5" fill="#FF7A1A"/>
+<text x="184.0" y="554.0" font-size="23" font-weight="700" fill="#E8EAED">POINT D'ENTRÉE</text>
+<text x="184.0" y="578.0" font-size="23" font-weight="700" fill="#E8EAED">&amp; CONFIGURATION</text>
+<text x="1320.0" y="571.0" text-anchor="end" font-size="15" fill="#8B8F96" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">main.py · src/utils</text>
+<path d="M 194.0 601.0 L 194.0 846.0" stroke="#FF7A1A" stroke-width="2" stroke-opacity="0.5" fill="none"/>
+<path d="M 194.0 638.0 L 216.0 638.0" stroke="#FF7A1A" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="216.0" y="615.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="216.0" y="615.0" width="5" height="46" rx="2.5" fill="#4DD97E"/>
+<text x="234.0" y="635.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">main.py</text>
+<text x="234.0" y="653.0" font-size="15" fill="#8B8F96">freeze_support() → QApplication → thème → MainWindow</text>
+<path d="M 194.0 690.0 L 216.0 690.0" stroke="#FF7A1A" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="216.0" y="667.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="216.0" y="667.0" width="5" height="46" rx="2.5" fill="#E5484D"/>
+<text x="234.0" y="687.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">utils/config_manager.py</text>
+<text x="234.0" y="705.0" font-size="15" fill="#8B8F96">config.json runtime · BUG : DEFAULT_CONFIG muté (copy superficielle)</text>
+<path d="M 194.0 742.0 L 216.0 742.0" stroke="#FF7A1A" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="216.0" y="719.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="216.0" y="719.0" width="5" height="46" rx="2.5" fill="#FFB35C"/>
+<text x="234.0" y="739.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">utils/config.py</text>
+<text x="234.0" y="757.0" font-size="15" fill="#8B8F96">Pydantic Settings + chemins C:\Jelotia · setup_logger dupliqué</text>
+<path d="M 194.0 794.0 L 216.0 794.0" stroke="#FF7A1A" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="216.0" y="771.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="216.0" y="771.0" width="5" height="46" rx="2.5" fill="#FFB35C"/>
+<text x="234.0" y="791.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">utils/logger.py</text>
+<text x="234.0" y="809.0" font-size="15" fill="#8B8F96">loguru, rotation · 0 % de couverture</text>
+<path d="M 194.0 846.0 L 216.0 846.0" stroke="#FF7A1A" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="216.0" y="823.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="216.0" y="823.0" width="5" height="46" rx="2.5" fill="#E5484D"/>
+<text x="234.0" y="843.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">utils/file_utils.py</text>
+<text x="234.0" y="861.0" font-size="15" fill="#8B8F96">FICHIER VIDE (0 octet)</text>
+<path d="M 1490.0 1340.0 C 1422.5 1340.0, 1422.5 968.0, 1340.0 968.0" fill="none" stroke="#5AA9FF" stroke-width="3.5" stroke-opacity="0.85"/>
+<circle cx="1340.0" cy="968.0" r="6" fill="#5AA9FF"/>
+<rect x="160.0" y="929.0" width="1180" height="78" rx="14" fill="#1B1D20" stroke="#5AA9FF" stroke-width="2.5" filter="url(#soft)"/>
+<rect x="160.0" y="929.0" width="7" height="78" rx="3.5" fill="#5AA9FF"/>
+<text x="184.0" y="960.0" font-size="23" font-weight="700" fill="#E8EAED">COUCHE UI</text>
+<text x="184.0" y="984.0" font-size="23" font-weight="700" fill="#E8EAED">PySide6 · 8 267 LOC</text>
+<text x="1320.0" y="977.0" text-anchor="end" font-size="15" fill="#8B8F96" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">src/ui — 17 widgets, graphe acyclique</text>
+<path d="M 194.0 1007.0 L 194.0 1356.0" stroke="#5AA9FF" stroke-width="2" stroke-opacity="0.5" fill="none"/>
+<path d="M 194.0 1044.0 L 216.0 1044.0" stroke="#5AA9FF" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="216.0" y="1021.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="216.0" y="1021.0" width="5" height="46" rx="2.5" fill="#4DD97E"/>
+<text x="234.0" y="1041.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">main_window.py (1003 l.)</text>
+<text x="234.0" y="1059.0" font-size="15" fill="#8B8F96">orchestrateur : 7 vues, hot folders, gating licence, reprise</text>
+<path d="M 194.0 1096.0 L 216.0 1096.0" stroke="#5AA9FF" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="216.0" y="1073.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="216.0" y="1073.0" width="5" height="46" rx="2.5" fill="#FFB35C"/>
+<text x="234.0" y="1093.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">widgets/ dashboard · job_queue · sheet_editor</text>
+<text x="234.0" y="1111.0" font-size="15" fill="#8B8F96">graphe 7 j fait main alors que pyqtgraph est déclaré</text>
+<path d="M 194.0 1148.0 L 216.0 1148.0" stroke="#5AA9FF" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="216.0" y="1125.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="216.0" y="1125.0" width="5" height="46" rx="2.5" fill="#FFB35C"/>
+<text x="234.0" y="1145.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">pdf_editor_view.py (1070 l.)</text>
+<text x="234.0" y="1163.0" font-size="15" fill="#8B8F96">plus gros fichier du dépôt</text>
+<path d="M 194.0 1200.0 L 216.0 1200.0" stroke="#5AA9FF" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="216.0" y="1177.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="216.0" y="1177.0" width="5" height="46" rx="2.5" fill="#E5484D"/>
+<text x="234.0" y="1197.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">settings_view.py (532 l.)</text>
+<text x="234.0" y="1215.0" font-size="15" fill="#8B8F96">7 onglets en dur · 5 réglages écrits mais jamais lus</text>
+<path d="M 194.0 1252.0 L 216.0 1252.0" stroke="#5AA9FF" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="216.0" y="1229.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="216.0" y="1229.0" width="5" height="46" rx="2.5" fill="#FFB35C"/>
+<text x="234.0" y="1249.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">theme.py + dark_theme.qss</text>
+<text x="234.0" y="1267.0" font-size="15" fill="#8B8F96">QSS inline dupliqué dans les widgets</text>
+<path d="M 194.0 1304.0 L 216.0 1304.0" stroke="#5AA9FF" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="216.0" y="1281.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="216.0" y="1281.0" width="5" height="46" rx="2.5" fill="#E5484D"/>
+<text x="234.0" y="1301.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">Thread UI bloqué</text>
+<text x="234.0" y="1319.0" font-size="15" fill="#8B8F96">batch_export · sheet_preview · sheet_editor.add_file</text>
+<path d="M 194.0 1356.0 L 216.0 1356.0" stroke="#5AA9FF" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="216.0" y="1333.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="216.0" y="1333.0" width="5" height="46" rx="2.5" fill="#E5484D"/>
+<text x="234.0" y="1353.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">0 test UI</text>
+<text x="234.0" y="1371.0" font-size="15" fill="#8B8F96">aucun test ne référence src.ui (5 233 stmts)</text>
+<path d="M 1490.0 1340.0 C 1422.5 1340.0, 1422.5 1478.0, 1340.0 1478.0" fill="none" stroke="#B08CFF" stroke-width="3.5" stroke-opacity="0.85"/>
+<circle cx="1340.0" cy="1478.0" r="6" fill="#B08CFF"/>
+<rect x="160.0" y="1439.0" width="1180" height="78" rx="14" fill="#1B1D20" stroke="#B08CFF" stroke-width="2.5" filter="url(#soft)"/>
+<rect x="160.0" y="1439.0" width="7" height="78" rx="3.5" fill="#B08CFF"/>
+<text x="184.0" y="1470.0" font-size="23" font-weight="700" fill="#E8EAED">QUALITÉ</text>
+<text x="184.0" y="1494.0" font-size="23" font-weight="700" fill="#E8EAED">&amp; TESTS</text>
+<text x="1320.0" y="1487.0" text-anchor="end" font-size="15" fill="#8B8F96" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">tests/ — 5 536 LOC</text>
+<path d="M 194.0 1517.0 L 194.0 1814.0" stroke="#B08CFF" stroke-width="2" stroke-opacity="0.5" fill="none"/>
+<path d="M 194.0 1554.0 L 216.0 1554.0" stroke="#B08CFF" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="216.0" y="1531.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="216.0" y="1531.0" width="5" height="46" rx="2.5" fill="#FFB35C"/>
+<text x="234.0" y="1551.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">pytest</text>
+<text x="234.0" y="1569.0" font-size="15" fill="#8B8F96">285 passed · 1 failed · 12 skipped (~22 s)</text>
+<path d="M 194.0 1606.0 L 216.0 1606.0" stroke="#B08CFF" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="216.0" y="1583.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="216.0" y="1583.0" width="5" height="46" rx="2.5" fill="#E5484D"/>
+<text x="234.0" y="1603.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">Couverture réelle ≈ 32 %</text>
+<text x="234.0" y="1621.0" font-size="15" fill="#8B8F96">76 % hors UI vs 85 % annoncé au README · pas de fail_under</text>
+<path d="M 194.0 1658.0 L 216.0 1658.0" stroke="#B08CFF" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="216.0" y="1635.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="216.0" y="1635.0" width="5" height="46" rx="2.5" fill="#E5484D"/>
+<text x="234.0" y="1655.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">12 skips environnementaux</text>
+<text x="234.0" y="1673.0" font-size="15" fill="#8B8F96">ICC/CMJN ×11 + activation_server ×1 → jamais validés</text>
+<path d="M 194.0 1710.0 L 216.0 1710.0" stroke="#B08CFF" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="216.0" y="1687.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="216.0" y="1687.0" width="5" height="46" rx="2.5" fill="#E5484D"/>
+<text x="234.0" y="1707.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">ruff (config projet)</text>
+<text x="234.0" y="1725.0" font-size="15" fill="#8B8F96">123 erreurs · 1348 en jeu de règles étendu</text>
+<path d="M 194.0 1762.0 L 216.0 1762.0" stroke="#B08CFF" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="216.0" y="1739.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="216.0" y="1739.0" width="5" height="46" rx="2.5" fill="#E5484D"/>
+<text x="234.0" y="1759.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">Aucune CI/CD</text>
+<text x="234.0" y="1777.0" font-size="15" fill="#8B8F96">pas de .github/ · .coverage et 102 PDF versionnés</text>
+<path d="M 194.0 1814.0 L 216.0 1814.0" stroke="#B08CFF" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="216.0" y="1791.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="216.0" y="1791.0" width="5" height="46" rx="2.5" fill="#FFB35C"/>
+<text x="234.0" y="1811.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">docs/QA_tests.md</text>
+<text x="234.0" y="1829.0" font-size="15" fill="#8B8F96">campagne terrain 2 000 fichiers · incident disque plein ouvert</text>
+<path d="M 1490.0 1340.0 C 1422.5 1340.0, 1422.5 1936.0, 1340.0 1936.0" fill="none" stroke="#7ED0C0" stroke-width="3.5" stroke-opacity="0.85"/>
+<circle cx="1340.0" cy="1936.0" r="6" fill="#7ED0C0"/>
+<rect x="160.0" y="1897.0" width="1180" height="78" rx="14" fill="#1B1D20" stroke="#7ED0C0" stroke-width="2.5" filter="url(#soft)"/>
+<rect x="160.0" y="1897.0" width="7" height="78" rx="3.5" fill="#7ED0C0"/>
+<text x="184.0" y="1928.0" font-size="23" font-weight="700" fill="#E8EAED">BUILD</text>
+<text x="184.0" y="1952.0" font-size="23" font-weight="700" fill="#E8EAED">&amp; DIFFUSION</text>
+<text x="1320.0" y="1945.0" text-anchor="end" font-size="15" fill="#8B8F96" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">installer/ · scripts/</text>
+<path d="M 194.0 1975.0 L 194.0 2168.0" stroke="#7ED0C0" stroke-width="2" stroke-opacity="0.5" fill="none"/>
+<path d="M 194.0 2012.0 L 216.0 2012.0" stroke="#7ED0C0" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="216.0" y="1989.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="216.0" y="1989.0" width="5" height="46" rx="2.5" fill="#4DD97E"/>
+<text x="234.0" y="2009.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">jelotia_imposer.spec</text>
+<text x="234.0" y="2027.0" font-size="15" fill="#8B8F96">PyInstaller onedir · console=False · 27 hiddenimports</text>
+<path d="M 194.0 2064.0 L 216.0 2064.0" stroke="#7ED0C0" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="216.0" y="2041.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="216.0" y="2041.0" width="5" height="46" rx="2.5" fill="#4DD97E"/>
+<text x="234.0" y="2061.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">jelotia_imposer.iss</text>
+<text x="234.0" y="2079.0" font-size="15" fill="#8B8F96">Inno Setup x64 · Win 10+ · FR/EN · clé HKLM</text>
+<path d="M 194.0 2116.0 L 216.0 2116.0" stroke="#7ED0C0" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="216.0" y="2093.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="216.0" y="2093.0" width="5" height="46" rx="2.5" fill="#E5484D"/>
+<text x="234.0" y="2113.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">Versions désynchronisées</text>
+<text x="234.0" y="2131.0" font-size="15" fill="#8B8F96">_version 1.37.1 / pyproject 1.38.0 / docs 1.5.1</text>
+<path d="M 194.0 2168.0 L 216.0 2168.0" stroke="#7ED0C0" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="216.0" y="2145.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="216.0" y="2145.0" width="5" height="46" rx="2.5" fill="#FFB35C"/>
+<text x="234.0" y="2165.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">scripts/</text>
+<text x="234.0" y="2183.0" font-size="15" fill="#8B8F96">bump_version · benchmark_runner · integration_tests (hors pytest)</text>
+<path d="M 1910.0 1340.0 C 1977.5 1340.0, 1977.5 229.0, 2060.0 229.0" fill="none" stroke="#4DD97E" stroke-width="3.5" stroke-opacity="0.85"/>
+<circle cx="2060.0" cy="229.0" r="6" fill="#4DD97E"/>
+<rect x="2060.0" y="190.0" width="1180" height="78" rx="14" fill="#1B1D20" stroke="#4DD97E" stroke-width="2.5" filter="url(#soft)"/>
+<rect x="2060.0" y="190.0" width="7" height="78" rx="3.5" fill="#4DD97E"/>
+<text x="2084.0" y="221.0" font-size="23" font-weight="700" fill="#E8EAED">CŒUR MÉTIER</text>
+<text x="2084.0" y="245.0" font-size="23" font-weight="700" fill="#E8EAED">src/core · 1 452 LOC</text>
+<text x="3220.0" y="238.0" text-anchor="end" font-size="15" fill="#8B8F96" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">orchestration &amp; services</text>
+<path d="M 2094.0 268.0 L 2094.0 669.0" stroke="#4DD97E" stroke-width="2" stroke-opacity="0.5" fill="none"/>
+<path d="M 2094.0 305.0 L 2116.0 305.0" stroke="#4DD97E" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="282.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="282.0" width="5" height="46" rx="2.5" fill="#E5484D"/>
+<text x="2134.0" y="302.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">hot_folder_monitor.py</text>
+<text x="2134.0" y="320.0" font-size="15" fill="#8B8F96">watchdog + stabilisation 2 s · AUCUN scan initial au démarrage</text>
+<path d="M 2094.0 357.0 L 2116.0 357.0" stroke="#4DD97E" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="334.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="334.0" width="5" height="46" rx="2.5" fill="#FFB35C"/>
+<text x="2134.0" y="354.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">auto_processor.py</text>
+<text x="2134.0" y="372.0" font-size="15" fill="#8B8F96">regroupement par rule_id · 30 % de couverture</text>
+<path d="M 2094.0 409.0 L 2116.0 409.0" stroke="#4DD97E" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="386.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="386.0" width="5" height="46" rx="2.5" fill="#E5484D"/>
+<text x="2134.0" y="406.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">worker_thread.py / worker_pool.py</text>
+<text x="2134.0" y="424.0" font-size="15" fill="#8B8F96">ready_event.wait() sans timeout · finalisation sans sémaphore</text>
+<path d="M 2094.0 461.0 L 2116.0 461.0" stroke="#4DD97E" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="438.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="438.0" width="5" height="46" rx="2.5" fill="#4DD97E"/>
+<text x="2134.0" y="458.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">job_processor.py</text>
+<text x="2134.0" y="476.0" font-size="15" fill="#8B8F96">pipeline import → preflight → correction → nesting → export</text>
+<path d="M 2094.0 513.0 L 2116.0 513.0" stroke="#4DD97E" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="490.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="490.0" width="5" height="46" rx="2.5" fill="#4DD97E"/>
+<text x="2134.0" y="510.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">ganging.py</text>
+<text x="2134.0" y="528.0" font-size="15" fill="#8B8F96">gang_signature sur paramètres physiques</text>
+<path d="M 2094.0 565.0 L 2116.0 565.0" stroke="#4DD97E" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="542.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="542.0" width="5" height="46" rx="2.5" fill="#E5484D"/>
+<text x="2134.0" y="562.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">output_manager.py</text>
+<text x="2134.0" y="580.0" font-size="15" fill="#8B8F96">QTimer dans le métier · archive_files supprime sans vérifier le zip</text>
+<path d="M 2094.0 617.0 L 2116.0 617.0" stroke="#4DD97E" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="594.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="594.0" width="5" height="46" rx="2.5" fill="#FFB35C"/>
+<text x="2134.0" y="614.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">reporting.py</text>
+<text x="2134.0" y="632.0" font-size="15" fill="#8B8F96">chr(64+i) → casse au-delà de la colonne Z</text>
+<path d="M 2094.0 669.0 L 2116.0 669.0" stroke="#4DD97E" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="646.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="646.0" width="5" height="46" rx="2.5" fill="#FFB35C"/>
+<text x="2134.0" y="666.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">presets · watch_rules · sheet_export_service · system_notifier</text>
+<text x="2134.0" y="684.0" font-size="15" fill="#8B8F96">MissingArtworkError · 2ᵉ QSystemTrayIcon</text>
+<path d="M 1910.0 1340.0 C 1977.5 1340.0, 1977.5 791.0, 2060.0 791.0" fill="none" stroke="#FFB35C" stroke-width="3.5" stroke-opacity="0.85"/>
+<circle cx="2060.0" cy="791.0" r="6" fill="#FFB35C"/>
+<rect x="2060.0" y="752.0" width="1180" height="78" rx="14" fill="#1B1D20" stroke="#FFB35C" stroke-width="2.5" filter="url(#soft)"/>
+<rect x="2060.0" y="752.0" width="7" height="78" rx="3.5" fill="#FFB35C"/>
+<text x="2084.0" y="783.0" font-size="23" font-weight="700" fill="#E8EAED">MOTEURS</text>
+<text x="2084.0" y="807.0" font-size="23" font-weight="700" fill="#E8EAED">15 modules · 3 601 LOC</text>
+<text x="3220.0" y="800.0" text-anchor="end" font-size="15" fill="#8B8F96" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">src/core/engines</text>
+<path d="M 2094.0 830.0 L 2094.0 1283.0" stroke="#FFB35C" stroke-width="2" stroke-opacity="0.5" fill="none"/>
+<path d="M 2094.0 867.0 L 2116.0 867.0" stroke="#FFB35C" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="844.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="844.0" width="5" height="46" rx="2.5" fill="#E5484D"/>
+<text x="2134.0" y="864.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">preflight_engine.py</text>
+<text x="2134.0" y="882.0" font-size="15" fill="#8B8F96">BUG : transparence jamais détectée (alpha vs smask) + faux positifs CMJN</text>
+<path d="M 2094.0 919.0 L 2116.0 919.0" stroke="#FFB35C" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="896.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="896.0" width="5" height="46" rx="2.5" fill="#E5484D"/>
+<text x="2134.0" y="916.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">preflight — polices</text>
+<text x="2134.0" y="934.0" font-size="15" fill="#8B8F96">boucle get_fonts() vide : embarquement jamais contrôlé</text>
+<path d="M 2094.0 971.0 L 2116.0 971.0" stroke="#FFB35C" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="948.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="948.0" width="5" height="46" rx="2.5" fill="#FFB35C"/>
+<text x="2134.0" y="968.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">nesting_engine.py</text>
+<text x="2134.0" y="986.0" font-size="15" fill="#8B8F96">MaxRects/Guillotine (rectpack) + stratégie grille · legacy Rectpack</text>
+<path d="M 2094.0 1023.0 L 2116.0 1023.0" stroke="#FFB35C" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="1000.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="1000.0" width="5" height="46" rx="2.5" fill="#FFB35C"/>
+<text x="2134.0" y="1020.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">layout_engine.py</text>
+<text x="2134.0" y="1038.0" font-size="15" fill="#8B8F96">reportlab · repères ARMS · filigrane licence · exceptions avalées</text>
+<path d="M 2094.0 1075.0 L 2116.0 1075.0" stroke="#FFB35C" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="1052.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="1052.0" width="5" height="46" rx="2.5" fill="#FFB35C"/>
+<text x="2134.0" y="1072.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">export_engine.py</text>
+<text x="2134.0" y="1090.0" font-size="15" fill="#8B8F96">PDF/X-1a &amp; X-4, TIFF, JPEG · OutputIntent FOGRA39 en dur</text>
+<path d="M 2094.0 1127.0 L 2116.0 1127.0" stroke="#FFB35C" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="1104.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="1104.0" width="5" height="46" rx="2.5" fill="#FFB35C"/>
+<text x="2134.0" y="1124.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">icc_engine.py</text>
+<text x="2134.0" y="1142.0" font-size="15" fill="#8B8F96">littleCMS réel (RGB→CMJN) · non testé faute de profil</text>
+<path d="M 2094.0 1179.0 L 2116.0 1179.0" stroke="#FFB35C" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="1156.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="1156.0" width="5" height="46" rx="2.5" fill="#FFB35C"/>
+<text x="2134.0" y="1176.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">pdf_editor.py</text>
+<text x="2134.0" y="1194.0" font-size="15" fill="#8B8F96">undo borné 10 · _snapshot() sérialise tout le doc ×10</text>
+<path d="M 2094.0 1231.0 L 2116.0 1231.0" stroke="#FFB35C" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="1208.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="1208.0" width="5" height="46" rx="2.5" fill="#4DD97E"/>
+<text x="2134.0" y="1228.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">bleed · correction · import · photoshop_tiff · template_composer</text>
+<text x="2134.0" y="1246.0" font-size="15" fill="#8B8F96">TIFF RIP legacy (Predictor=2, RowsPerStrip=4)</text>
+<path d="M 2094.0 1283.0 L 2116.0 1283.0" stroke="#FFB35C" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="1260.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="1260.0" width="5" height="46" rx="2.5" fill="#4DD97E"/>
+<text x="2134.0" y="1280.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">qr_engine · qr_batch · qr_import</text>
+<text x="2134.0" y="1298.0" font-size="15" fill="#8B8F96">plans de lots, mapping colonnes, badges</text>
+<path d="M 1910.0 1340.0 C 1977.5 1340.0, 1977.5 1405.0, 2060.0 1405.0" fill="none" stroke="#E5A0FF" stroke-width="3.5" stroke-opacity="0.85"/>
+<circle cx="2060.0" cy="1405.0" r="6" fill="#E5A0FF"/>
+<rect x="2060.0" y="1366.0" width="1180" height="78" rx="14" fill="#1B1D20" stroke="#E5A0FF" stroke-width="2.5" filter="url(#soft)"/>
+<rect x="2060.0" y="1366.0" width="7" height="78" rx="3.5" fill="#E5A0FF"/>
+<text x="2084.0" y="1404.0" font-size="25" font-weight="700" fill="#E8EAED">PERSISTANCE</text>
+<text x="3220.0" y="1414.0" text-anchor="end" font-size="15" fill="#8B8F96" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">src/database — SQLite/SQLAlchemy</text>
+<path d="M 2094.0 1444.0 L 2094.0 1689.0" stroke="#E5A0FF" stroke-width="2" stroke-opacity="0.5" fill="none"/>
+<path d="M 2094.0 1481.0 L 2116.0 1481.0" stroke="#E5A0FF" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="1458.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="1458.0" width="5" height="46" rx="2.5" fill="#4DD97E"/>
+<text x="2134.0" y="1478.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">models.py</text>
+<text x="2134.0" y="1496.0" font-size="15" fill="#8B8F96">4 tables : jobs · file_items · sheets · qr_batches</text>
+<path d="M 2094.0 1533.0 L 2116.0 1533.0" stroke="#E5A0FF" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="1510.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="1510.0" width="5" height="46" rx="2.5" fill="#E5484D"/>
+<text x="2134.0" y="1530.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">AUCUN index</text>
+<text x="2134.0" y="1548.0" font-size="15" fill="#8B8F96">pas même sur les FK job_id → scans sur historique volumineux</text>
+<path d="M 2094.0 1585.0 L 2116.0 1585.0" stroke="#E5A0FF" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="1562.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="1562.0" width="5" height="46" rx="2.5" fill="#E5484D"/>
+<text x="2134.0" y="1582.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">_migrate_schema() vs Alembic</text>
+<text x="2134.0" y="1600.0" font-size="15" fill="#8B8F96">ALTER TABLE manuel (archived, quantities) hors des 2 révisions</text>
+<path d="M 2094.0 1637.0 L 2116.0 1637.0" stroke="#E5A0FF" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="1614.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="1614.0" width="5" height="46" rx="2.5" fill="#FFB35C"/>
+<text x="2134.0" y="1634.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">repository.py</text>
+<text x="2134.0" y="1652.0" font-size="15" fill="#8B8F96">get_all_jobs charge tout puis expunge · pas de pagination</text>
+<path d="M 2094.0 1689.0 L 2116.0 1689.0" stroke="#E5A0FF" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="1666.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="1666.0" width="5" height="46" rx="2.5" fill="#FFB35C"/>
+<text x="2134.0" y="1686.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">SQLite brut</text>
+<text x="2134.0" y="1704.0" font-size="15" fill="#8B8F96">pas de PRAGMA foreign_keys · pas de check_same_thread · utcnow déprécié</text>
+<path d="M 1910.0 1340.0 C 1977.5 1340.0, 1977.5 1811.0, 2060.0 1811.0" fill="none" stroke="#E5484D" stroke-width="3.5" stroke-opacity="0.85"/>
+<circle cx="2060.0" cy="1811.0" r="6" fill="#E5484D"/>
+<rect x="2060.0" y="1772.0" width="1180" height="78" rx="14" fill="#1B1D20" stroke="#E5484D" stroke-width="2.5" filter="url(#soft)"/>
+<rect x="2060.0" y="1772.0" width="7" height="78" rx="3.5" fill="#E5484D"/>
+<text x="2084.0" y="1803.0" font-size="23" font-weight="700" fill="#E8EAED">LICENCES</text>
+<text x="2084.0" y="1827.0" font-size="23" font-weight="700" fill="#E8EAED">&amp; ACTIVATION</text>
+<text x="3220.0" y="1820.0" text-anchor="end" font-size="15" fill="#8B8F96" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">src/core/licensing.py · activation_server/</text>
+<path d="M 2094.0 1850.0 L 2094.0 2095.0" stroke="#E5484D" stroke-width="2" stroke-opacity="0.5" fill="none"/>
+<path d="M 2094.0 1887.0 L 2116.0 1887.0" stroke="#E5484D" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="1864.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="1864.0" width="5" height="46" rx="2.5" fill="#FFB35C"/>
+<text x="2134.0" y="1884.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">Ed25519 hors-ligne</text>
+<text x="2134.0" y="1902.0" font-size="15" fill="#8B8F96">clé publique en dur · README annonce à tort « RSA / AES-256 »</text>
+<path d="M 2094.0 1939.0 L 2116.0 1939.0" stroke="#E5484D" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="1916.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="1916.0" width="5" height="46" rx="2.5" fill="#E5484D"/>
+<text x="2134.0" y="1936.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">Vérification 100 % locale</text>
+<text x="2134.0" y="1954.0" font-size="15" fill="#8B8F96">contournable · empreinte SHA256(MachineGuid)[:32]</text>
+<path d="M 2094.0 1991.0 L 2116.0 1991.0" stroke="#E5484D" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="1968.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="1968.0" width="5" height="46" rx="2.5" fill="#E5484D"/>
+<text x="2134.0" y="1988.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">Gating = 3 boutons</text>
+<text x="2134.0" y="2006.0" font-size="15" fill="#8B8F96">api et multi_post déclarés dans ENTERPRISE_FEATURES mais jamais gatés</text>
+<path d="M 2094.0 2043.0 L 2116.0 2043.0" stroke="#E5484D" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="2020.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="2020.0" width="5" height="46" rx="2.5" fill="#FFB35C"/>
+<text x="2134.0" y="2040.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">Quota gratuit 50 fichiers/j</text>
+<text x="2134.0" y="2058.0" font-size="15" fill="#8B8F96">_volume_check compare UTC et heure locale naïve</text>
+<path d="M 2094.0 2095.0 L 2116.0 2095.0" stroke="#E5484D" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="2072.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="2072.0" width="5" height="46" rx="2.5" fill="#E5484D"/>
+<text x="2134.0" y="2092.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">activation_server (FastAPI)</text>
+<text x="2134.0" y="2110.0" font-size="15" fill="#8B8F96">app · issuer · store · admin — 0 % de couverture, test skippé</text>
+<path d="M 1910.0 1340.0 C 1977.5 1340.0, 1977.5 2217.0, 2060.0 2217.0" fill="none" stroke="#8B8F96" stroke-width="3.5" stroke-opacity="0.85"/>
+<circle cx="2060.0" cy="2217.0" r="6" fill="#8B8F96"/>
+<rect x="2060.0" y="2178.0" width="1180" height="78" rx="14" fill="#1B1D20" stroke="#8B8F96" stroke-width="2.5" filter="url(#soft)"/>
+<rect x="2060.0" y="2178.0" width="7" height="78" rx="3.5" fill="#8B8F96"/>
+<text x="2084.0" y="2209.0" font-size="23" font-weight="700" fill="#E8EAED">DOCUMENTATION</text>
+<text x="2084.0" y="2233.0" font-size="23" font-weight="700" fill="#E8EAED">&amp; PILOTAGE</text>
+<text x="3220.0" y="2226.0" text-anchor="end" font-size="15" fill="#8B8F96" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">docs/ · memory-bank/ · 1c Workbench/</text>
+<path d="M 2094.0 2256.0 L 2094.0 2501.0" stroke="#8B8F96" stroke-width="2" stroke-opacity="0.5" fill="none"/>
+<path d="M 2094.0 2293.0 L 2116.0 2293.0" stroke="#8B8F96" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="2270.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="2270.0" width="5" height="46" rx="2.5" fill="#FFB35C"/>
+<text x="2134.0" y="2290.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">README.md (29 Ko)</text>
+<text x="2134.0" y="2308.0" font-size="15" fill="#8B8F96">vitrine commerciale · plusieurs chiffres non tenus</text>
+<path d="M 2094.0 2345.0 L 2116.0 2345.0" stroke="#8B8F96" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="2322.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="2322.0" width="5" height="46" rx="2.5" fill="#4DD97E"/>
+<text x="2134.0" y="2342.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">docs/ ×5</text>
+<text x="2134.0" y="2360.0" font-size="15" fill="#8B8F96">technique · installation · utilisateur · maintenance · QA (v1.5.1)</text>
+<path d="M 2094.0 2397.0 L 2116.0 2397.0" stroke="#8B8F96" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="2374.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="2374.0" width="5" height="46" rx="2.5" fill="#4DD97E"/>
+<text x="2134.0" y="2394.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">memory-bank/ ×5</text>
+<text x="2134.0" y="2412.0" font-size="15" fill="#8B8F96">brief · contexte · patterns · techContext · progress</text>
+<path d="M 2094.0 2449.0 L 2116.0 2449.0" stroke="#8B8F96" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="2426.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="2426.0" width="5" height="46" rx="2.5" fill="#E5484D"/>
+<text x="2134.0" y="2446.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">progress.md — Phase 6</text>
+<text x="2134.0" y="2464.0" font-size="15" fill="#8B8F96">14 cases tests/QA/perf, AUCUNE cochée</text>
+<path d="M 2094.0 2501.0 L 2116.0 2501.0" stroke="#8B8F96" stroke-width="2" stroke-opacity="0.5"/>
+<rect x="2116.0" y="2478.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
+<rect x="2116.0" y="2478.0" width="5" height="46" rx="2.5" fill="#4DD97E"/>
+<text x="2134.0" y="2498.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">1c Workbench/</text>
+<text x="2134.0" y="2516.0" font-size="15" fill="#8B8F96">maquettes HTML du design system (source des tokens)</text>
+<rect x="0" y="2584" width="3400" height="96" fill="#0E0F11" fill-opacity="0.9"/>
+<text x="212.5" y="2618" text-anchor="middle" font-size="30" font-weight="700" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">21 651</text>
+<text x="212.5" y="2642" text-anchor="middle" font-size="15" fill="#8B8F96">LOC Python</text>
+<text x="637.5" y="2618" text-anchor="middle" font-size="30" font-weight="700" fill="#FFB35C" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">285 / 1 / 12</text>
+<text x="637.5" y="2642" text-anchor="middle" font-size="15" fill="#8B8F96">tests OK / KO / skip</text>
+<text x="1062.5" y="2618" text-anchor="middle" font-size="30" font-weight="700" fill="#E5484D" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">≈ 32 %</text>
+<text x="1062.5" y="2642" text-anchor="middle" font-size="15" fill="#8B8F96">couverture réelle</text>
+<text x="1487.5" y="2618" text-anchor="middle" font-size="30" font-weight="700" fill="#E5484D" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">123</text>
+<text x="1487.5" y="2642" text-anchor="middle" font-size="15" fill="#8B8F96">erreurs ruff</text>
+<text x="1912.5" y="2618" text-anchor="middle" font-size="30" font-weight="700" fill="#E5484D" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">0</text>
+<text x="1912.5" y="2642" text-anchor="middle" font-size="15" fill="#8B8F96">pipeline CI</text>
+<text x="2337.5" y="2618" text-anchor="middle" font-size="30" font-weight="700" fill="#E5484D" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">2</text>
+<text x="2337.5" y="2642" text-anchor="middle" font-size="15" fill="#8B8F96">bugs prouvés en exécution</text>
+<text x="2762.5" y="2618" text-anchor="middle" font-size="30" font-weight="700" fill="#FFB35C" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">5</text>
+<text x="2762.5" y="2642" text-anchor="middle" font-size="15" fill="#8B8F96">réglages UI orphelins</text>
+<text x="3187.5" y="2618" text-anchor="middle" font-size="30" font-weight="700" fill="#FFB35C" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">3</text>
+<text x="3187.5" y="2642" text-anchor="middle" font-size="15" fill="#8B8F96">versions divergentes</text>
+</svg>
