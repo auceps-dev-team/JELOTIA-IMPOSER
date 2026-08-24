@@ -23,3 +23,10 @@ license.key
 # Store de jetons du serveur d'activation (données clients) — ne pas committer
 activation.db
 activation_server/*.db
+
+# Artefacts de mesure et dossiers de travail locaux
+.coverage
+coverage.xml
+htmlcov/
+scratch/
+graphify-out/

@@ -1,3 +1,4 @@
+import errno
 import logging
 import shutil
 from pathlib import Path
@@ -265,8 +266,15 @@ def finalize_job_sheets(
     if sheets:
         from src.core.engines.export_engine import ExportEngine
         from src.core.engines.layout_engine import LayoutEngine
+        from src.utils.disk import InsufficientDiskSpaceError, ensure_free_space
+
         layout_engine = LayoutEngine()
         export_engine = ExportEngine()
+
+        # Checked BEFORE writing anything: a disk that fills up mid-export
+        # produced a job silently missing most of its sheets (QA 14.5).
+        ensure_free_space(config.output_dir)
+
         try:
             sheets = layout_engine.process_job_layout(job_id, sheets, settings, job_temp_dir)
 
@@ -284,6 +292,20 @@ def finalize_job_sheets(
                     )
                     # Update export_path to the final output file
                     sheet.export_path = final_path
+        except InsufficientDiskSpaceError:
+            # Must NOT be swallowed like the rest: this is precisely the case
+            # the operator has to see. Propagates to the worker callback, which
+            # surfaces it as a job failure in the UI.
+            raise
+        except OSError as e:
+            # A write that failed for lack of room deserves the same treatment
+            # even when it surfaces as a plain OS error mid-export.
+            if getattr(e, "errno", None) == errno.ENOSPC:
+                raise InsufficientDiskSpaceError(
+                    "Disque plein pendant l'export : le job est incomplet. "
+                    "Libérez de l'espace puis relancez-le."
+                ) from e
+            logger.exception(f"Fatal error during layout or export generation: {e}")
         except Exception as e:
             logger.exception(f"Fatal error during layout or export generation: {e}")
 

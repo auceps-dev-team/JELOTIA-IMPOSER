@@ -4,6 +4,7 @@ import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from loguru import logger
 from PySide6.QtCore import QTimer
 
 from src.utils.config_manager import ConfigManager
@@ -64,8 +65,7 @@ class OutputManager:
                 f.write('</JobTicket>\n')
             return str(ticket_path)
         except Exception as e:
-            if sys.stdout is not None:
-                print(f"Failed to generate Job Ticket: {e}")
+            logger.error(f"Job Ticket non généré : {e}")
             return None
 
     def copy_to_rip_hot_folder(self, file_paths: list, rip_dir: str):
@@ -90,23 +90,50 @@ class OutputManager:
         zip_path = day_dir / f"{job_name}.zip"
         
         try:
+            archived: dict[str, Path] = {}
             with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
                 for fp in file_paths:
                     p = Path(fp)
                     if p.exists():
                         zipf.write(str(p), p.name)
-            
-            # Remove original files after successful zip
-            for fp in file_paths:
-                p = Path(fp)
+                        archived[p.name] = p
+
+            # Never delete an original before the archive is PROVEN readable.
+            # A disk filling up mid-write yields a truncated zip without always
+            # raising, and the previous code deleted the sources regardless —
+            # the archive was unusable and the files were gone for good.
+            self._verify_archive(zip_path, archived)
+
+            for p in archived.values():
                 if p.exists():
                     p.unlink()
-                    
+
             return str(zip_path)
         except Exception as e:
-            if sys.stdout is not None:
-                print(f"Failed to archive {job_name}: {e}")
+            logger.error(f"Archivage de « {job_name} » abandonné, "
+                         f"originaux conservés : {e}")
             return None
+
+    @staticmethod
+    def _verify_archive(zip_path: Path, expected: dict) -> None:
+        """Raises unless `zip_path` reopens, holds every expected member and
+        passes its CRC checks. Deliberately strict: this is the last gate
+        before the source files are destroyed."""
+        with zipfile.ZipFile(zip_path, 'r') as zipf:
+            corrupt = zipf.testzip()
+            if corrupt is not None:
+                raise OSError(f"archive corrompue (membre « {corrupt} »)")
+            missing = set(expected) - set(zipf.namelist())
+            if missing:
+                raise OSError(f"archive incomplète, manquant : {sorted(missing)}")
+            for name, source in expected.items():
+                info = zipf.getinfo(name)
+                actual = source.stat().st_size
+                if info.file_size != actual:
+                    raise OSError(
+                        f"« {name} » tronqué dans l'archive "
+                        f"({info.file_size} au lieu de {actual} octets)"
+                    )
             
     def cleanup_archives(self):
         """Deletes archives older than X days"""

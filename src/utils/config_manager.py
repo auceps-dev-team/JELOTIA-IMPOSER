@@ -1,3 +1,4 @@
+import copy
 import json
 import shutil
 import sys
@@ -72,7 +73,11 @@ class ConfigManager:
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(ConfigManager, cls).__new__(cls)
-            cls._instance.config = DEFAULT_CONFIG.copy()
+            # deepcopy, not copy(): a shallow copy shares every sub-dict with
+            # the module constant, so load()'s `self.config[key].update(...)`
+            # and every set() rewrote DEFAULT_CONFIG in place — destroying the
+            # factory-defaults fallback from the first write onwards.
+            cls._instance.config = copy.deepcopy(DEFAULT_CONFIG)
             cls._instance.load()
         return cls._instance
 

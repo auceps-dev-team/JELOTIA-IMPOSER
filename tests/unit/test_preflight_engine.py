@@ -108,50 +108,78 @@ def test_preflight_multiple_errors(valid_file_item, default_settings):
     assert PreflightErrorType.SIZE_MISMATCH in error_types
 
 
-@patch("src.core.engines.preflight_engine.fitz.open")
-def test_preflight_pdf_no_transparency(mock_fitz_open, valid_file_item, default_settings):
-    valid_file_item.format = FileFormat.PDF
-    
-    mock_doc = MagicMock()
-    mock_page = MagicMock()
-    mock_doc.__len__.return_value = 1
-    mock_doc.__getitem__.return_value = mock_page
-    
-    mock_page.get_fonts.return_value = []
-    mock_page.get_images.return_value = [(1,)]
-    
-    mock_doc.extract_image.return_value = {"colorspace": 1, "ext": "jpeg"}
-    
-    mock_fitz_open.return_value = mock_doc
-    
-    engine = PreflightEngine()
-    item = engine.run_preflight(valid_file_item, default_settings)
-    
-    assert item.preflight_status == PreflightStatus.OK
+# --------------------------------------------------------------------------- #
+#  Deep PDF analysis — on REAL files.
+#
+#  These replace mock-based tests that fed the engine a dictionary PyMuPDF never
+#  produces ({"colorspace": 3, "alpha": True}). They passed at 100 % coverage
+#  while the engine detected no transparency at all and flagged every CMYK file
+#  as transparent. A mock can only confirm what the author already believes.
+# --------------------------------------------------------------------------- #
+
+def _pdf_with_image(tmp_path, img, name):
+    """A one-page PDF really embedding `img`."""
+    import io
+
+    buf = io.BytesIO()
+    img.save(buf, format="TIFF" if img.mode == "CMYK" else "PNG")
+    doc = fitz.open()
+    page = doc.new_page(width=300, height=300)
+    page.insert_image(fitz.Rect(20, 20, 280, 280), stream=buf.getvalue())
+    path = tmp_path / name
+    doc.save(str(path))
+    doc.close()
+    return path
 
 
-@patch("src.core.engines.preflight_engine.fitz.open")
-def test_preflight_pdf_with_transparency(mock_fitz_open, valid_file_item, default_settings):
+def test_preflight_detects_real_transparency(tmp_path, valid_file_item, default_settings):
+    """An RGBA image carries a soft mask — PyMuPDF exposes it as `smask`."""
+    from PIL import Image
+
     valid_file_item.format = FileFormat.PDF
-    
-    mock_doc = MagicMock()
-    mock_page = MagicMock()
-    mock_doc.__len__.return_value = 1
-    mock_doc.__getitem__.return_value = mock_page
-    
-    mock_page.get_fonts.return_value = []
-    mock_page.get_images.return_value = [(1,)]
-    
-    mock_doc.extract_image.return_value = {"colorspace": 3, "alpha": True}
-    
-    mock_fitz_open.return_value = mock_doc
-    
-    engine = PreflightEngine()
-    item = engine.run_preflight(valid_file_item, default_settings)
-    
+    valid_file_item.path = _pdf_with_image(
+        tmp_path, Image.new("RGBA", (80, 80), (255, 0, 0, 128)), "rgba.pdf"
+    )
+
+    item = PreflightEngine().run_preflight(valid_file_item, default_settings)
+
+    types = [e.type for e in item.preflight_errors]
+    assert PreflightErrorType.TRANSPARENCY_DETECTED in types
     assert item.preflight_status == PreflightStatus.WARNING
-    assert len(item.preflight_errors) == 1
-    assert item.preflight_errors[0].type == PreflightErrorType.TRANSPARENCY_DETECTED
+
+
+def test_preflight_opaque_rgb_is_not_flagged(tmp_path, valid_file_item, default_settings):
+    from PIL import Image
+
+    valid_file_item.format = FileFormat.PDF
+    valid_file_item.path = _pdf_with_image(
+        tmp_path, Image.new("RGB", (80, 80), (0, 120, 255)), "rgb.pdf"
+    )
+
+    item = PreflightEngine().run_preflight(valid_file_item, default_settings)
+
+    types = [e.type for e in item.preflight_errors]
+    assert PreflightErrorType.TRANSPARENCY_DETECTED not in types
+
+
+def test_preflight_cmyk_file_is_not_flagged_transparent(
+    tmp_path, valid_file_item, default_settings
+):
+    """The regression that mattered most: `colorspace == 4` means four inks,
+    i.e. CMYK — the normal production file — never transparency."""
+    from PIL import Image
+
+    valid_file_item.format = FileFormat.PDF
+    valid_file_item.path = _pdf_with_image(
+        tmp_path, Image.new("CMYK", (80, 80), (0, 0, 0, 255)), "cmyk.pdf"
+    )
+
+    item = PreflightEngine().run_preflight(valid_file_item, default_settings)
+
+    types = [e.type for e in item.preflight_errors]
+    assert PreflightErrorType.TRANSPARENCY_DETECTED not in types, (
+        "un fichier CMJN conforme ne doit jamais être signalé transparent"
+    )
 
 
 @patch("src.core.engines.preflight_engine.fitz.open")
@@ -182,22 +210,71 @@ def test_preflight_generic_exception(mock_check_res, valid_file_item, default_se
     assert "Unknown crash" in item.preflight_errors[0].message
 
 
-@patch("src.core.engines.preflight_engine.fitz.open")
-def test_preflight_pdf_fonts(mock_fitz_open, valid_file_item, default_settings):
+# --------------------------------------------------------------------------- #
+#  Embedded fonts — the discriminating field is `ext` (index 1), not `type`.
+#  A tuple reads (xref, ext, type, basefont, name, encoding, referencer):
+#    NOT embedded  (5, 'n/a', 'Type1', 'Helvetica', ...)
+#    embedded      (5, 'ttf', 'Type0', 'Arial',     ...)
+#  Testing index 2 would compare 'Type1'/'Type0' to 'n/a' and never fire.
+# --------------------------------------------------------------------------- #
+
+def _pdf_with_text(tmp_path, name, fontfile=None):
+    doc = fitz.open()
+    page = doc.new_page(width=300, height=200)
+    if fontfile:
+        page.insert_text((30, 100), "Police embarquee", fontname="F0",
+                         fontfile=fontfile, fontsize=14)
+    else:
+        page.insert_text((30, 100), "Police base-14", fontname="helv", fontsize=14)
+    path = tmp_path / name
+    doc.save(str(path))
+    doc.close()
+    return path
+
+
+def test_preflight_flags_a_non_embedded_font(tmp_path, valid_file_item, default_settings):
+    """A base-14 font is only referenced: the RIP will substitute it."""
     valid_file_item.format = FileFormat.PDF
-    
-    mock_doc = MagicMock()
-    mock_page = MagicMock()
-    mock_doc.__len__.return_value = 1
-    mock_doc.__getitem__.return_value = mock_page
-    
-    # Simulate font tuples
-    mock_page.get_fonts.return_value = [(1, "ext", "type", "basefont", "name", "encoding")]
-    mock_page.get_images.return_value = []
-    
-    mock_fitz_open.return_value = mock_doc
-    
-    engine = PreflightEngine()
-    item = engine.run_preflight(valid_file_item, default_settings)
-    
-    assert item.preflight_status == PreflightStatus.OK
+    valid_file_item.path = _pdf_with_text(tmp_path, "base14.pdf")
+
+    item = PreflightEngine().run_preflight(valid_file_item, default_settings)
+
+    errors = [e for e in item.preflight_errors
+              if e.type == PreflightErrorType.FONTS_NOT_EMBEDDED]
+    assert errors, "une police non embarquée doit être signalée"
+    assert "Helvetica" in errors[0].message, "le nom de la police doit être cité"
+    assert item.preflight_status == PreflightStatus.WARNING
+
+
+@pytest.mark.skipif(
+    not Path("C:/Windows/Fonts/arial.ttf").is_file(),
+    reason="aucune police TTF système pour construire le cas embarqué",
+)
+def test_preflight_accepts_an_embedded_font(tmp_path, valid_file_item, default_settings):
+    valid_file_item.format = FileFormat.PDF
+    valid_file_item.path = _pdf_with_text(
+        tmp_path, "embedded.pdf", fontfile="C:/Windows/Fonts/arial.ttf"
+    )
+
+    item = PreflightEngine().run_preflight(valid_file_item, default_settings)
+
+    types = [e.type for e in item.preflight_errors]
+    assert PreflightErrorType.FONTS_NOT_EMBEDDED not in types
+
+
+def test_font_embedding_uses_ext_not_type():
+    """Guards the exact confusion that made the first fix proposal inert."""
+    not_embedded = (5, "n/a", "Type1", "Helvetica", "helv", "WinAnsiEncoding", 0)
+    embedded = (5, "ttf", "Type0", "Arial Regular", "F0", "Identity-H", 0)
+
+    assert PreflightEngine._font_is_embedded(embedded) is True
+    assert PreflightEngine._font_is_embedded(not_embedded) is False
+    # If the check ever regresses to index 2, both tuples read the same.
+    assert not_embedded[2] != "n/a" and embedded[2] != "n/a"
+
+
+def test_image_alpha_uses_smask_not_colorspace():
+    """CMYK (colorspace 4) must never read as transparency."""
+    assert PreflightEngine._image_has_alpha({"smask": 6, "colorspace": 3}) is True
+    assert PreflightEngine._image_has_alpha({"smask": 0, "colorspace": 3}) is False
+    assert PreflightEngine._image_has_alpha({"smask": 0, "colorspace": 4}) is False

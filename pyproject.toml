@@ -1,6 +1,6 @@
 [project]
 name = "jelotia-imposer"
-version = "1.39.0"
+version = "1.40.0"
 description = "Logiciel Professionnel d'Imposition Automatique Industrielle"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -32,6 +32,17 @@ pythonpath = ["."]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# Local working directories must not move the lint count: without this, a
+# personal scratch/ folder made the same command report 123 errors on one
+# machine and 160 on another, which is unusable as a CI gate.
+exclude = [
+    "scratch",
+    "dist",
+    "build",
+    "integration_test_data",
+    "graphify-out",
+    ".venv",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]

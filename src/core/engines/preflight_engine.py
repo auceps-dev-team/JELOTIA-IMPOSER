@@ -89,41 +89,57 @@ class PreflightEngine:
                     )
                 )
 
+    @staticmethod
+    def _image_has_alpha(img_dict: dict) -> bool:
+        """True when an extracted image really carries transparency.
+
+        PyMuPDF exposes the soft mask under `smask` (an xref, 0 when absent) —
+        never under `alpha`. Testing `colorspace == 4` is worse than useless
+        here: 4 means four components, i.e. CMYK, so it flagged every correct
+        production file as transparent and taught operators to ignore preflight.
+        `alpha` is still honoured in case a future version starts emitting it.
+        """
+        return bool(img_dict.get("smask")) or img_dict.get("alpha") in (True, 1)
+
+    @staticmethod
+    def _font_is_embedded(font_tuple: tuple) -> bool:
+        """True when a `page.get_fonts()` entry describes an embedded font.
+
+        The tuple is (xref, ext, type, basefont, name, encoding, referencer).
+        The field that tells embedding apart is `ext` (index 1): it names the
+        embedded file's format ("ttf", "cff"…) and is the literal "n/a" when the
+        font is only referenced. `type` (index 2) is the PDF font type — always
+        "Type1"/"Type0"/"TrueType" — and never distinguishes the two cases.
+        """
+        return len(font_tuple) > 1 and font_tuple[1] != "n/a"
+
     def _analyze_pdf_deep(self, item: FileItem, settings: JobSettings) -> None:
-        """Opens the PDF and checks for fonts, transparency, and bleed."""
+        """Opens the PDF and checks embedded fonts and transparency.
+
+        Scans every page: ImportEngine currently creates one FileItem per page
+        but they all reference the same file, so there is no page index to
+        narrow this down to.
+        """
+        doc = None
         try:
             doc = fitz.open(item.path)
-            # Just check the first page (or page 0 if split)
-            # In our current workflow, multi-page PDFs are NOT yet split into separate files physically,
-            # but the FileItem might represent a specific page if we had page_index.
-            # Currently ImportEngine creates a FileItem per page but references the SAME file.
-            # We will just scan the whole document for simplicity or the specific page if we add index tracking.
 
             has_transparency = False
+            missing_fonts: list[str] = []
 
-            for page_num in range(len(doc)):
-                page = doc[page_num]
+            for page in doc:
+                for font_tuple in page.get_fonts():
+                    if not self._font_is_embedded(font_tuple):
+                        # index 3 = basefont, the name the operator recognises
+                        name = font_tuple[3] if len(font_tuple) > 3 else "?"
+                        if name not in missing_fonts:
+                            missing_fonts.append(name)
 
-                # Check fonts
-                fonts = page.get_fonts()
-                for font in fonts:
-                    # font is a tuple: (xref, ext, type, basefont, name, encoding)
-                    # To accurately check if a font is embedded in PyMuPDF, we need to inspect the object stream
-                    # But for now, we'll implement a stub or a basic check
-                    # This is a bit advanced, PyMuPDF doesn't natively expose "is_embedded" in get_fonts easily
-                    # We might skip strict font embedding check here, or assume True unless we parse the PDF raw.
-                    # As a placeholder, we won't throw this arbitrarily.
-                    pass
-
-                # Check transparency (look for images with alpha channels)
-                images = page.get_images()
-                for img_tuple in images:
-                    xref = img_tuple[0]
-                    img_dict = doc.extract_image(xref)
-                    # If image has an alpha channel, we flag transparency
-                    if img_dict.get("colorspace") == 4 or "alpha" in img_dict:
-                        has_transparency = True
-                        break
+                if not has_transparency:
+                    for img_tuple in page.get_images():
+                        if self._image_has_alpha(doc.extract_image(img_tuple[0])):
+                            has_transparency = True
+                            break
 
             if has_transparency:
                 item.preflight_errors.append(
@@ -134,7 +150,18 @@ class PreflightEngine:
                     )
                 )
 
-            doc.close()
+            if missing_fonts:
+                item.preflight_errors.append(
+                    PreflightError(
+                        type=PreflightErrorType.FONTS_NOT_EMBEDDED,
+                        message=(
+                            "Police(s) non embarquée(s) : "
+                            + ", ".join(missing_fonts)
+                            + " — le RIP les remplacera."
+                        ),
+                        is_blocking=False,
+                    )
+                )
         except fitz.FileDataError as e:
             item.preflight_errors.append(
                 PreflightError(
@@ -143,3 +170,8 @@ class PreflightEngine:
                     is_blocking=True,
                 )
             )
+        finally:
+            # Closed here rather than after the checks: an exception mid-scan
+            # would otherwise leak the open document.
+            if doc is not None:
+                doc.close()
