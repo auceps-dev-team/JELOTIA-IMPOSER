@@ -1,13 +1,13 @@
 import asyncio
 import logging
 import uuid
-import sys
 from pathlib import Path
+
 import fitz
 
-from src.core.models.domain import JobSettings, PreflightStatus, Job
-from src.core.processors.worker_pool import WorkerPoolManager
+from src.core.models.domain import JobSettings
 from src.core.processors.job_processor import process_job_files
+from src.core.processors.worker_pool import WorkerPoolManager
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("IntegrationTests")

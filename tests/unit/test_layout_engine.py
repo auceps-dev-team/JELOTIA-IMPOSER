@@ -1,12 +1,13 @@
 import uuid
-from pathlib import Path
 
 import fitz
 import pytest
 
 from src.core.engines.layout_engine import LayoutEngine
 from src.core.models.domain import (
-    ColorMode, FileItem, JobSettings, PlacedItem, PreflightStatus, Sheet
+    JobSettings,
+    PlacedItem,
+    Sheet,
 )
 
 

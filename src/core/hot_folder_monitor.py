@@ -93,7 +93,7 @@ class HotFolderMonitor:
         if path.is_file():
             try:
                 return path.stat().st_size
-            except:
+            except OSError:
                 return -1
         elif path.is_dir():
             total_size = 0
@@ -104,7 +104,7 @@ class HotFolderMonitor:
                         if not fp.is_symlink():
                             total_size += fp.stat().st_size
                 return total_size
-            except:
+            except OSError:
                 return -1
         return -1
         

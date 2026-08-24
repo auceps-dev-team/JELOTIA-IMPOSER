@@ -70,7 +70,8 @@ class AutoProcessor(QThread):
             target = now.replace(hour=target_hr, minute=target_min, second=0, microsecond=0)
             if now >= target and now < target + timedelta(minutes=5):
                 return True
-        except:
+        except (ValueError, TypeError):
+            # Malformed schedule string in config: not a scheduled run.
             pass
         return False
         

@@ -418,7 +418,8 @@ class SettingsWidget(QWidget):
         fmt = self.config.get("export", "format")
         if fmt:
             idx = self.export_format.findText(fmt)
-            if idx >= 0: self.export_format.setCurrentIndex(idx)
+            if idx >= 0:
+                self.export_format.setCurrentIndex(idx)
         self.export_dpi.setValue(self.config.get("export", "dpi") or 300)
         self.cut_contour.setChecked(self.config.get("export", "cut_contour") or False)
         
@@ -444,12 +445,14 @@ class SettingsWidget(QWidget):
         role = self.config.get("users", "role")
         if role:
             idx = self.user_role.findText(role)
-            if idx >= 0: self.user_role.setCurrentIndex(idx)
+            if idx >= 0:
+                self.user_role.setCurrentIndex(idx)
 
         theme = self.config.get("ui", "theme")
         if theme:
             idx = self.ui_theme.findText(theme)
-            if idx >= 0: self.ui_theme.setCurrentIndex(idx)
+            if idx >= 0:
+                self.ui_theme.setCurrentIndex(idx)
 
         # Automation
         self.group_delay.setValue(self.config.get("automation", "group_delay_minutes") or 5)

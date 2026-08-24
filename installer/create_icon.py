@@ -5,8 +5,8 @@ Requiert : Pillow (pip install Pillow)
 """
 
 from pathlib import Path
-from PIL import Image, ImageDraw, ImageFont
 
+from PIL import Image, ImageDraw, ImageFont
 
 SIZES = [16, 32,48, 64, 128, 256]
 OUTPUT = Path(__file__).parent / "jelotia.ico"

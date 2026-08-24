@@ -1,5 +1,4 @@
 import shutil
-import sys
 import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -145,11 +144,14 @@ class OutputManager:
             return
             
         for year_dir in self.archive_dir.iterdir():
-            if not year_dir.is_dir(): continue
+            if not year_dir.is_dir():
+                continue
             for month_dir in year_dir.iterdir():
-                if not month_dir.is_dir(): continue
+                if not month_dir.is_dir():
+                    continue
                 for day_dir in month_dir.iterdir():
-                    if not day_dir.is_dir(): continue
+                    if not day_dir.is_dir():
+                        continue
                     
                     try:
                         folder_date = datetime(int(year_dir.name), int(month_dir.name), int(day_dir.name))
@@ -160,7 +162,8 @@ class OutputManager:
                         
         # Clean empty month/year folders
         for year_dir in self.archive_dir.iterdir():
-            if not year_dir.is_dir(): continue
+            if not year_dir.is_dir():
+                continue
             for month_dir in year_dir.iterdir():
                 if month_dir.is_dir() and not any(month_dir.iterdir()):
                     month_dir.rmdir()

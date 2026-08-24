@@ -11,7 +11,6 @@ These tests pin each link:
 """
 
 import zipfile
-from pathlib import Path
 
 import pytest
 
@@ -20,7 +19,6 @@ from src.utils.disk import (
     ensure_free_space,
     free_space_mb,
 )
-
 
 # --------------------------------------------------------------------------- #
 #  M8 — the archive is proven readable before anything is deleted             #

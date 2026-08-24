@@ -46,6 +46,13 @@ exclude = [
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
+# TODO (audit Sprint 3) — lever cette exception.
+# E501 est temporairement toléré : 90 lignes trop longues, héritées, à traiter
+# par lots. Tout le reste (F, E7xx, I) est appliqué et la CI échoue dessus, ce
+# qui donne une barrière utile dès maintenant plutôt qu'un pipeline rouge en
+# permanence que l'équipe apprendrait à ignorer. Les nouvelles lignes ajoutées
+# respectent déjà la limite de 100.
+ignore = ["E501"]
 
 [tool.mypy]
 python_version = "3.12"

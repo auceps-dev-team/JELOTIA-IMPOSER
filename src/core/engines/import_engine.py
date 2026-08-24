@@ -16,7 +16,6 @@ from src.core.models.domain import (
     PreflightStatus,
 )
 
-
 # Matches the PDF content-stream operators that set a DeviceRGB fill/stroke
 # color directly (three numeric operands followed by rg/RG), e.g. "1 0 0 rg".
 _RGB_OPERATOR_RE = re.compile(rb"(?:^|\s)[-\d.]+\s+[-\d.]+\s+[-\d.]+\s+[rR][gG](?=\s|$)")

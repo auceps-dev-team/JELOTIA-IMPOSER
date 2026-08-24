@@ -4,7 +4,7 @@ from pathlib import Path
 import fitz
 import pytest
 
-from src.core.models.domain import JobSettings, PreflightStatus
+from src.core.models.domain import JobSettings
 from src.core.processors.job_processor import finalize_job_sheets, process_job_files
 
 

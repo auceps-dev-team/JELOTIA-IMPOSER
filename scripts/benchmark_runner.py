@@ -96,7 +96,7 @@ async def run_benchmark(count: int, workers: int):
     await pool.stop()
     
     print("-" * 50)
-    print(f"Benchmark completed!")
+    print("Benchmark completed!")
     print(f"Total files processed : {count}")
     print(f"Total time            : {total_time:.2f} seconds")
     print(f"Throughput            : {(count / total_time):.2f} files/second")

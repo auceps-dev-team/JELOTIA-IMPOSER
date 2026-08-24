@@ -1,6 +1,4 @@
-import asyncio
 import time
-from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QCoreApplication
