@@ -7,6 +7,21 @@
 
 **Carte mentale associée** : [`docs/audit/carte_mentale.svg`](carte_mentale.svg) (source vectorielle) et [`carte_mentale.png`](carte_mentale.png). Générateur reproductible : `python tools/generate_mindmap.py`.
 
+> ### ⚠️ Révision 2 — après contre-audit indépendant
+>
+> Cet audit a été soumis à un contre-audit exécuté sur `phase-0-setup · cd25933 · v1.39.0` (Windows 11, profils ICC présents, groupe `server` installé). **20 des 21 points majeurs ont été confirmés**, dont les plus graves. Quatre corrections ont été intégrées ci-dessous et sont signalées par le marqueur **[R2]** :
+>
+> | # | Nature | Correction apportée |
+> |---|---|---|
+> | **C2** | **Erreur technique de l'audit** | Le correctif que je proposais pour les polices (`type == "n/a"`) **ne détecte rien** : c'est `ext`, index **1**, qui vaut `n/a` — pas `type`, index 2. Rejoué et confirmé sur deux PDF réels (§4.2). Le diagnostic restait juste, le remède aurait reproduit exactement le bug dénoncé en C1. |
+> | **§10 🟡** | **Affirmation fausse** | L'OutputIntent « FOGRA39 en dur » n'existe pas : `_output_condition()` dérive la condition du profil réellement utilisé, et FOGRA39 n'est plus qu'un repli en l'absence de profil. Point retiré. |
+> | **§10 🟡** | **Sur-comptage** | 11 `print()` annoncés → **7** dans `src/`, plus 8 dans `activation_server/`. Mon compte incluait un faux positif (`…fingerprint(`). |
+> | **M4** | **Cause racine ajoutée** | `scripts/bump_version.py` n'écrit **jamais** `src/_version.py` (vérifié : il ne touche que `pyproject.toml`, l'`.iss` et `uv.lock`). Aligner les versions à la main est donc inutile — elles redivergeront au prochain bump. |
+>
+> Deux écarts de mesure s'expliquent par la différence de commit et d'environnement, sans invalider le fond : les compteurs de tests et de lint (§5.1, §6.2) et le nombre de versions divergentes (§6.3), détaillés sur place.
+>
+> Un lien que je n'avais pas fait est repris du contre-audit et intégré : **M8 + M13 se combinent en perte de données réelle**, ce qui fait remonter M8 en Sprint 1 (§10, §11).
+
 ---
 
 ## 1. Synthèse pour décideur
@@ -125,18 +140,43 @@ if has_alpha:
 ```
 et supprimer complètement la condition `colorspace == 4`. Le test doit être réécrit sur un **PDF RGBA réel** généré à la volée, pas sur un mock.
 
-### 4.2 🔴 CRITIQUE — Le contrôle des polices embarquées est un stub
+### 4.2 🔴 CRITIQUE — Le contrôle des polices embarquées est un stub **[R2 — correctif rectifié]**
 
 `preflight_engine.py`, lignes 107-116 :
 
 ```python
 for font in page.get_fonts():
-    pass  # commentaire admettant explicitement que le contrôle n'est pas implémenté
+    # commentaire admettant explicitement que le contrôle n'est pas implémenté
+    pass
 ```
 
 Le cinquième axe annoncé du preflight (« polices embarquées ») n'existe pas. Un fichier dont la police n'est pas embarquée passe le contrôle et sera substitué par le RIP — cause classique de réimpression.
 
-Sur les 6 axes annoncés (résolution, mode couleur, transparence, polices, dimensions, fond perdu), **2 sont inopérants et 1 génère de faux positifs**. La correction est simple : `page.get_fonts()` retourne des tuples dont l'élément `type` vaut `"n/a"` pour une police non embarquée.
+Sur les 6 axes annoncés (résolution, mode couleur, transparence, polices, dimensions, fond perdu), **2 sont inopérants et 1 génère de faux positifs**.
+
+> **[R2] Correction d'une erreur de la première version de cet audit.** J'écrivais que « `page.get_fonts()` retourne des tuples dont l'élément **`type`** vaut `"n/a"` pour une police non embarquée ». **C'est faux, et le contre-audit a eu raison de le relever.** C'est `ext` (**index 1**) qui vaut `n/a` ; `type` (index 2) vaut toujours `Type1`, `Type0`, `TrueType`… Implémenter le correctif tel que je l'avais écrit aurait produit un contrôle qui **ne se déclenche jamais** — c'est-à-dire la faute exacte dénoncée en §4.1, et tout aussi invisible en test.
+
+**Vérification** (deux PDF générés à la volée : une base-14 non embarquée, une TTF DejaVu réellement embarquée) :
+
+```
+tuple = (xref, ext, type, basefont, name, encoding, referencer)
+
+NON embarquée  (5, 'n/a', 'Type1', 'Helvetica',        'helv', 'WinAnsiEncoding')
+EMBARQUÉE      (5, 'ttf', 'Type0', 'DejaVu Sans Book', 'F0',   'Identity-H')
+
+test erroné (v1)   type == 'n/a'  ->  False / False   ← ne discrimine RIEN
+test correct       ext  == 'n/a'  ->  True  / False   ← discrimine bien
+```
+
+Détail aggravant pour la version 1 de cet audit : **le commentaire déjà présent dans le code donne le bon ordre des champs** (`# font is a tuple: (xref, ext, type, basefont, name, encoding)`). L'information était sous les yeux ; je ne l'avais pas rejouée en exécution, contrairement à ce que j'avais fait pour C1. C'est précisément le manquement que je reproche au test de transparence.
+
+**Correctif — vérifié** :
+```python
+for font in page.get_fonts(full=False):
+    if font[1] == "n/a":        # index 1 = ext ; "n/a" ⇒ police NON embarquée
+        # → FONT_NOT_EMBEDDED, en citant font[3] (basefont)
+```
+Le test doit être écrit sur **deux PDF réels** (une police embarquée, une non embarquée), jamais sur un mock.
 
 ### 4.3 🔴 CRITIQUE — `ConfigManager` corrompt sa propre configuration par défaut
 
@@ -172,6 +212,8 @@ $ QT_QPA_PLATFORM=offscreen pytest tests/ -q
 ```
 
 **Échec unique** — `test_licensing.py::test_bundled_path_only_exists_in_frozen_build:258` : le test monkeypatche `sys.frozen` et attend un `WindowsPath`. Il n'est pas portable hors Windows. Défaut de test, pas défaut de produit — mais il **rend la suite rouge par défaut sur toute machine non-Windows**, ce qui décourage son exécution.
+
+> **[R2] Ces trois chiffres dépendent de la machine, et c'est le point le plus important de ce paragraphe.** Le contre-audit, exécuté sous Windows 11 avec les profils ICC installés et le groupe `server`, obtient **313 passés, 0 échec, 0 skip**. Il n'y a pas contradiction : ma mesure a été faite sous Linux, sans profil CMJN ni `fastapi`. La conclusion en sort **renforcée** plutôt qu'affaiblie — ces tests **se taisent silencieusement là où les profils manquent, c'est-à-dire exactement la configuration d'un runner de CI vierge**. Créer la CI sans embarquer un profil ICC dans `tests/fixtures/` produirait une CI verte qui ne teste ni la conversion colorimétrique ni l'export PDF/X. C'est la raison d'être du point 11 du plan d'action.
 
 **12 tests skippés, tous environnementaux et tous sur des zones à risque** :
 - `test_icc_engine` ×7 et `test_export_engine` ×4 : skippés faute de profil ICC CMJN sur la machine. **La conversion colorimétrique et l'export PDF/X — c'est-à-dire ce que l'imprimeur reçoit réellement — ne sont validés par aucun test qui s'exécute effectivement.**
@@ -227,6 +269,8 @@ $ ruff check .          # configuration du projet : E, F, I — line-length 100
 Found 123 errors (périmètre applicatif)
 ```
 
+> **[R2]** Le contre-audit relève **160 erreurs** au lieu de 123 : l'écart provient d'un dossier `scratch/` présent sur son poste et non exclu par la configuration ruff. Cela ajoute au passage un constat mineur — **`[tool.ruff] exclude` n'est pas configuré**, si bien que tout répertoire de travail local pollue la mesure de lint. À fixer en même temps que la CI, sans quoi le seuil d'échec sera ingérable.
+
 Avec un jeu de règles étendu (13 familles), le total atteint **1 348**, dont hors `assert` de test : `T201` (print) ×46, `S110` (`except: pass`) ×9, `UP006` ×141 et `UP045` ×102 (annotations de type au style pré-3.9/3.10 alors que le projet cible 3.12), `RUF013` ×6 (`Optional` implicite), `B904` ×2 (perte du contexte d'exception), `RUF006` ×3 (tâche asyncio sans référence retenue → risque de collecte prématurée).
 
 `mypy` est configuré en mode **`strict = true`** dans `pyproject.toml`, mais n'est pas installé dans l'environnement de développement et n'est exécuté nulle part. Une configuration stricte jamais lancée est un faux signal de rigueur.
@@ -239,7 +283,13 @@ Avec un jeu de règles étendu (13 familles), le total atteint **1 348**, dont h
 | `pyproject.toml`, `README.md`, `installer/jelotia_imposer.iss` | **1.38.0** |
 | `docs/*.md` (les 5 documents) | **1.5.1** |
 
-`scripts/bump_version.py` existe mais n'a manifestement pas été exécuté au dernier incrément. Conséquence concrète : la fenêtre « Info Système » affichera 1.37.1 alors que le programme d'installation aura enregistré 1.38.0 dans `HKLM\SOFTWARE\Jelotia\Imposer\Version` — le support client ne peut pas identifier de façon fiable la version installée.
+Conséquence concrète : la fenêtre « Info Système » affichera 1.37.1 alors que le programme d'installation aura enregistré 1.38.0 dans `HKLM\SOFTWARE\Jelotia\Imposer\Version` — le support client ne peut pas identifier de façon fiable la version installée.
+
+> **[R2] Cause racine, que la version 1 de cet audit n'identifiait pas.** J'attribuais la dérive à un oubli d'exécution de `scripts/bump_version.py`. C'est plus grave : **le script est structurellement incapable de synchroniser `src/_version.py`**. Vérification de ses cibles d'écriture — `write_pyproject()`, `write_installer()`, `sync_lockfile()` — **aucune ne touche `_version.py` ni le README**, alors que `_version.py` porte l'en-tête « *Updated by scripts/bump_version.py* ». Le fichier ment sur son propre mode de mise à jour.
+>
+> Le contre-audit compte d'ailleurs **quatre** versions en circulation à son commit (`_version.py` 1.37.1, `pyproject`/`.iss` 1.39.0, README 1.38.0, docs 1.5.1) contre trois au mien : la dérive **s'aggrave à chaque incrément**, ce qui est la signature d'un défaut d'outillage et non d'un oubli ponctuel.
+>
+> **Conséquence sur le plan d'action** : aligner les fichiers à la main (point 5 du Sprint 1) est un geste sans valeur tant que le script n'est pas corrigé. Il faut **d'abord** étendre `bump_version.py` à `_version.py` et au README, **puis** rejouer un bump.
 
 ### 6.4 Contenu versionné inapproprié
 
@@ -370,16 +420,34 @@ Réglages effectivement consommés (à conserver) : `output.archive_days` (`outp
 | M5 | Thread UI bloqué sur 3 chemins d'export | `batch_export_dialog`, `sheet_preview`, `sheet_editor` |
 | M6 | 5 réglages d'interface sans consommateur, dont `users.role` | `settings_view.save_settings` |
 | M7 | `ready_event.wait()` sans timeout → gel possible de l'interface | `worker_thread.submit_job`, `submit_finalize` |
-| M8 | `archive_files()` supprime les originaux sans vérifier le ZIP | `output_manager.py:100-105` |
+| **M8** | **`archive_files()` supprime les originaux sans vérifier le ZIP → perte de données (voir encadré)** | `output_manager.py:100-105` |
 | M9 | `api` et `multi_post` déclarés payants mais jamais gatés | `licensing.ENTERPRISE_FEATURES` |
 | M10 | Vérification de licence 100 % locale, contournable | `licensing.py` |
 | M11 | Finalisation du pool sans sémaphore (seuls les chunks sont bornés) | `worker_pool.py` |
 | M12 | 123 erreurs ruff alors que le README affirme le lint propre | dépôt entier |
-| M13 | Incident QA **ouvert** : disque plein → planches 4 à 20 non exportées, **aucun message utilisateur** | `docs/QA_tests.md` test 14.5 |
+| **M13** | **Incident QA ouvert : disque plein → planches 4 à 20 non exportées, aucun message utilisateur (voir encadré)** | `docs/QA_tests.md` test 14.5 |
+
+> ### [R2] ⛔ M8 + M13 : une chaîne de perte de données définitive
+>
+> Pris isolément, M8 et M13 semblaient deux défauts modérés. **Combinés, ils détruisent des fichiers client sans le dire** — ce lien, apporté par le contre-audit, est vérifié :
+>
+> 1. Le disque sature pendant l'export (scénario **déjà survenu**, incident QA 14.5, toujours ouvert) ;
+> 2. `zipfile` écrit une archive **tronquée** ; refermer un `ZipFile` sur un disque plein ne lève pas systématiquement d'exception ;
+> 3. `archive_files()` enchaîne immédiatement — le `unlink()` des originaux suit le bloc `with zipfile…` **sans aucun contrôle intermédiaire** ;
+> 4. Le `except Exception: pass` du niveau supérieur absorbe ce qui pourrait remonter ;
+> 5. **Résultat : les originaux sont supprimés, l'archive est inexploitable, et l'opérateur ne voit rien.**
+>
+> Mesure à l'appui : **`testzip`, `disk_usage`, `shutil.disk_*` et `free_space` totalisent 0 occurrence dans tout `src/`**. Il n'existe donc, nulle part dans le produit, ni vérification d'intégrité d'archive ni contrôle d'espace disque.
+>
+> **C'est le défaut le plus coûteux de tout cet audit** : un bug de calcul se corrige et se rejoue, un fichier client supprimé ne se récupère pas. M8 est en conséquence remonté de Sprint 2 en **Sprint 1**, aux côtés de M13 qui y figurait déjà. Le correctif est de quelques lignes : `zf.testzip()` (ou relecture de la liste des membres) **avant** tout `unlink()`, et un `shutil.disk_usage()` comparé à la taille estimée avant de lancer l'export.
 
 ### 🟡 Mineur — dette à résorber
 
-`src/utils/file_utils.py` **vide (0 octet)** · `setup_logger()` dupliqué entre `config.py` et `logger.py` · `reporting.export_production_xlsx` utilise `chr(64 + index)` → casse au-delà de la colonne Z · `pdf_editor._snapshot()` sérialise le document entier ×10 (mémoire ∝ taille du PDF) · `OutputManager.__init__` crée un `QTimer` (Qt dans la couche métier) · `SystemNotifier` instancie un **second** `QSystemTrayIcon` · `export_engine._export_pdfx` inscrit un OutputIntent « FOGRA39 » en dur sans profil correspondant · `LayoutEngine._stamp_artwork` avale ses exceptions · `RectpackNestingStrategy` legacy (`add_bin()` par élément, rotation ±0.1 mm, `job_id=None`) · `_submit_job` crée un stub PENDING hors transaction · `setup_hot_folder_monitor` / `restart_hot_folder_monitors` dupliqués à 90 % · 3 `except:` nus, 9 `except Exception: pass`, 11 `print()` en production · 5 dépendances déclarées jamais importées · `.coverage` et 102 PDF versionnés · `mypy strict` configuré mais jamais exécuté · aucun `tests/conftest.py` · README annonce « RSA / AES-256 » au lieu d'Ed25519 · `dark_theme.qss` jamais chargé.
+`src/utils/file_utils.py` **vide (0 octet)** · `setup_logger()` dupliqué entre `config.py` et `logger.py` · `reporting.export_production_xlsx` utilise `chr(64 + index)` → casse au-delà de la colonne Z · `pdf_editor._snapshot()` sérialise le document entier ×10 (mémoire ∝ taille du PDF) · `OutputManager.__init__` crée un `QTimer` (Qt dans la couche métier) · `SystemNotifier` instancie un **second** `QSystemTrayIcon` · `LayoutEngine._stamp_artwork` avale ses exceptions · `RectpackNestingStrategy` legacy (`add_bin()` par élément, rotation ±0.1 mm, `job_id=None`) · `_submit_job` crée un stub PENDING hors transaction · `setup_hot_folder_monitor` / `restart_hot_folder_monitors` dupliqués à 90 % · 3 `except:` nus, 9 `except Exception: pass`, **7 `print()` dans `src/` + 8 dans `activation_server/`** · 5 dépendances déclarées jamais importées · `.coverage` et 102 PDF versionnés · 4 `datetime.utcnow` dépréciés · `mypy strict` configuré mais jamais exécuté · aucun `tests/conftest.py` · `[tool.ruff] exclude` non configuré · README annonce « RSA / AES-256 » (2 mentions) au lieu d'Ed25519 · `dark_theme.qss` jamais chargé.
+
+> **[R2] Deux rectifications dans cette liste.**
+> - **Point retiré — OutputIntent FOGRA39 « en dur » : l'affirmation était fausse**, y compris à mon propre commit. `export_engine._output_condition()` (ligne 267) **dérive la condition de sortie du profil réellement utilisé** via `icc_engine.read_profile()`, avec un commentaire explicite (« *so the PDF stops claiming FOGRA39 when the operator selected something else* ») ; le code **embarque même le profil** en `/DestOutputProfile`, comme PDF/X l'exige, et journalise un avertissement quand il ne le peut pas. « FOGRA39 » n'est plus qu'une valeur de repli en l'absence totale de profil. C'est du bon code, que j'avais rangé à tort parmi les défauts.
+> - **Sur-comptage corrigé — `print()` : 11 → 7** dans `src/`. Mon grep capturait `…fingerprint(` comme une occurrence de `print(`. Le décompte exact est 7 dans `src/` (`config_manager` ×3, `output_manager` ×2, `auto_processor` ×1, `hot_folder_monitor` ×1) et 8 dans `activation_server/admin.py`.
 
 ---
 
@@ -388,19 +456,19 @@ Réglages effectivement consommés (à conserver) : `output.archive_days` (`outp
 ### Sprint 1 — Rétablir la véracité fonctionnelle et le filet de sécurité (~1 semaine)
 
 1. **C1** — Corriger la détection de transparence (`smask`), supprimer la condition `colorspace == 4`, **réécrire le test sur un PDF RGBA réel**.
-2. **C2** — Implémenter le contrôle des polices embarquées (`type == "n/a"` dans `get_fonts()`), avec test sur un PDF réel.
+2. **C2** — Implémenter le contrôle des polices embarquées : **`font[1] == "n/a"`** (champ `ext` — **et non `font[2]`/`type`, qui ne discrimine rien**, cf. §4.2), avec test sur **deux PDF réels** (une police embarquée, une non embarquée).
 3. **C3** — `copy.deepcopy(DEFAULT_CONFIG)` dans `ConfigManager`, plus un test de non-régression sur l'identité.
-4. **C4** — Créer `.github/workflows/ci.yml` : `ruff check` + `pytest` + `pytest --cov` sur Windows et Linux, à chaque push. C'est le point de levier le plus élevé du plan : il empêche toute régression future d'atteindre l'installeur.
-5. **M4** — Exécuter `scripts/bump_version.py`, aligner les 3 sources, et ajouter au workflow CI une vérification de cohérence des versions.
-6. **M13** — Vérifier l'espace disque avant export et remonter une erreur explicite à l'utilisateur ; clore l'incident QA 14.5.
+4. **C4** — Créer `.github/workflows/ci.yml` : `ruff check` + `pytest` + `pytest --cov` sur Windows et Linux, à chaque push. C'est le point de levier le plus élevé du plan : il empêche toute régression future d'atteindre l'installeur. **Y inclure dès le départ le profil ICC du point 11** — sinon la CI démarrera verte en sautant silencieusement colorimétrie et PDF/X — **et un `[tool.ruff] exclude`**, faute de quoi le seuil d'échec variera selon les dossiers de travail locaux.
+5. **M4** — **D'abord** étendre `scripts/bump_version.py` à `src/_version.py` et au README (il ne les écrit pas aujourd'hui : c'est la cause racine, cf. §6.3), **ensuite** rejouer un bump pour aligner les sources, **puis** ajouter au workflow CI une vérification de cohérence des versions. Aligner à la main sans corriger le script ne tiendrait pas un incrément.
+6. **M13 + M8 — perte de données, priorité absolue du sprint** : contrôler l'espace disque (`shutil.disk_usage()`) avant export et remonter une erreur explicite à l'utilisateur ; **vérifier l'intégrité du ZIP (`testzip()`) avant tout `unlink()` d'originaux** ; clore l'incident QA 14.5. Voir l'encadré du §10.
 
 ### Sprint 2 — Fiabiliser la production (~2 semaines)
 
 7. **M1** — Scan initial du hot folder au démarrage, avec `rule_id`.
 8. **M2 / M3** — Index sur toutes les FK + `created_at` + `archived` ; une révision Alembic rattrapant `archived` et `quantities` ; suppression de `_migrate_schema()`.
-9. **M8** — Vérifier l'intégrité du ZIP avant de supprimer les originaux.
+9. *(M8 a été remonté en Sprint 1, point 6 — voir l'encadré perte de données du §10.)*
 10. **M7** — Ajouter un timeout à `ready_event.wait()` et propager l'échec proprement.
-11. **C6** — Embarquer un profil ICC CMJN libre (par ex. Coated FOGRA39 depuis le jeu ICC ouvert) dans `tests/fixtures/` pour dé-skipper les 11 tests ICC/export.
+11. **C6** — Embarquer un profil ICC CMJN libre (par ex. Coated FOGRA39 depuis le jeu ICC ouvert) dans `tests/fixtures/` pour dé-skipper les 11 tests ICC/export. **À traiter avec le point 4** : sans ce profil, la CI d'un runner vierge sautera ces tests en silence et affichera un vert trompeur.
 12. **M6** — Soit câbler `performance.workers`, `memory_limit_mb` et `preflight.allowed_formats` sur leurs consommateurs, soit **retirer ces champs de l'interface**. Pour `users.role`, retirer le champ tant qu'aucun contrôle d'accès n'existe.
 
 ### Sprint 3 — Consolider (~1 mois)

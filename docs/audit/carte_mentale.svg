@@ -303,7 +303,7 @@
 <rect x="2116.0" y="542.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
 <rect x="2116.0" y="542.0" width="5" height="46" rx="2.5" fill="#E5484D"/>
 <text x="2134.0" y="562.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">output_manager.py</text>
-<text x="2134.0" y="580.0" font-size="15" fill="#8B8F96">QTimer dans le métier · archive_files supprime sans vérifier le zip</text>
+<text x="2134.0" y="580.0" font-size="15" fill="#8B8F96">QTimer dans le métier · archive_files() unlink sans testzip : PERTE DE DONNÉES</text>
 <path d="M 2094.0 617.0 L 2116.0 617.0" stroke="#4DD97E" stroke-width="2" stroke-opacity="0.5"/>
 <rect x="2116.0" y="594.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
 <rect x="2116.0" y="594.0" width="5" height="46" rx="2.5" fill="#FFB35C"/>
@@ -344,9 +344,9 @@
 <text x="2134.0" y="1038.0" font-size="15" fill="#8B8F96">reportlab · repères ARMS · filigrane licence · exceptions avalées</text>
 <path d="M 2094.0 1075.0 L 2116.0 1075.0" stroke="#FFB35C" stroke-width="2" stroke-opacity="0.5"/>
 <rect x="2116.0" y="1052.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
-<rect x="2116.0" y="1052.0" width="5" height="46" rx="2.5" fill="#FFB35C"/>
+<rect x="2116.0" y="1052.0" width="5" height="46" rx="2.5" fill="#4DD97E"/>
 <text x="2134.0" y="1072.0" font-size="17" font-weight="600" fill="#E8EAED" font-family="'Cascadia Mono', 'DejaVu Sans Mono', Consolas, monospace">export_engine.py</text>
-<text x="2134.0" y="1090.0" font-size="15" fill="#8B8F96">PDF/X-1a &amp; X-4, TIFF, JPEG · OutputIntent FOGRA39 en dur</text>
+<text x="2134.0" y="1090.0" font-size="15" fill="#8B8F96">PDF/X-1a &amp; X-4, TIFF, JPEG · OutputIntent dérivé du profil + ICC embarqué</text>
 <path d="M 2094.0 1127.0 L 2116.0 1127.0" stroke="#FFB35C" stroke-width="2" stroke-opacity="0.5"/>
 <rect x="2116.0" y="1104.0" width="1106.0" height="46" rx="9" fill="#212328" stroke="#33363B" stroke-width="1"/>
 <rect x="2116.0" y="1104.0" width="5" height="46" rx="2.5" fill="#FFB35C"/>
