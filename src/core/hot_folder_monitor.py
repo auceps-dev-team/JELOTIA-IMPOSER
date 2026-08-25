@@ -4,6 +4,7 @@ import sys
 import time
 from pathlib import Path
 
+from loguru import logger
 from PySide6.QtCore import QMutex, QMutexLocker, QObject, QThread, Signal
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
@@ -75,7 +76,40 @@ class HotFolderMonitor:
             # Non-recursive because we only care about top-level drops
             self.observer.schedule(self.handler, str(self.input_path), recursive=False)
             self.observer.start()
+            # Watchdog only reports what happens WHILE it watches. Files dropped
+            # in overnight — app closed for an update, a Windows reboot, a power
+            # cut — generated no event and stayed invisible for ever. Scanning
+            # after the observer is running (not before) means a file arriving
+            # during the scan is caught by one path or the other;
+            # add_pending_item() de-duplicates, so being seen twice is harmless.
+            self.scan_existing_files()
             self.stabilization_thread.start()
+
+    def scan_existing_files(self) -> int:
+        """Queues the files already sitting in the watched folder, exactly as if
+        watchdog had just reported them — same stabilisation, same rule_id, so
+        their gamme is preserved. Returns how many were queued."""
+        try:
+            entries = sorted(self.input_path.iterdir())
+        except OSError as e:
+            logger.warning(f"Balayage initial impossible ({self.input_path}) : {e}")
+            return 0
+
+        queued = 0
+        for path in entries:
+            # Mirrors NewJobHandler: only top-level items, and never our own
+            # temporary artefacts.
+            if path.name.startswith("."):
+                continue
+            self.add_pending_item(path)
+            queued += 1
+
+        if queued:
+            logger.info(
+                f"Balayage initial de {self.input_path} : {queued} élément(s) "
+                f"déjà présent(s) pris en charge"
+            )
+        return queued
             
     def stop(self):
         if self.observer:

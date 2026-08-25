@@ -1,6 +1,8 @@
+import os
 import sys
 import uuid
 from pathlib import Path
+from typing import Optional
 
 from PySide6.QtGui import QGuiApplication, QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
@@ -107,7 +109,11 @@ class MainWindow(QMainWindow):
 
     def setup_worker_pool(self):
         from src.core.worker_thread import WorkerPoolThread
-        self.worker_thread = WorkerPoolThread(self)
+
+        # F6·CONFIG > Performance > Nombre de Workers. Was written by the
+        # settings screen and read by nobody: the pool always ran at
+        # cpu_count()-1 whatever the operator chose.
+        self.worker_thread = WorkerPoolThread(self, max_workers=self._configured_workers())
         self.worker_thread.job_started.connect(self.handle_job_started)
         self.worker_thread.job_completed.connect(self.handle_job_completed)
         self.worker_thread.job_failed.connect(self.handle_job_failed)
@@ -124,6 +130,24 @@ class MainWindow(QMainWindow):
         "PDF (STANDARD)": "PDF",
         "JDF": "PDF/X-4",
     }
+
+    @staticmethod
+    def _configured_workers() -> Optional[int]:
+        """Worker count from the settings screen, or None to let the pool pick.
+
+        Clamped to the machine's CPU count: a stray 64 on a 4-core shop PC would
+        spawn 64 processes and thrash it. An unreadable or absent value falls
+        back to the pool's own default rather than failing to start.
+        """
+        from src.utils.config_manager import ConfigManager
+
+        try:
+            value = int(ConfigManager().get("performance", "workers") or 0)
+        except (TypeError, ValueError):
+            return None
+        if value <= 0:
+            return None
+        return max(1, min(value, (os.cpu_count() or 1)))
 
     def _build_job_settings(self) -> JobSettings:
         """Builds JobSettings from the user-configured config.json (Settings screen)
@@ -143,6 +167,7 @@ class MainWindow(QMainWindow):
             allow_rotation=bool(config.get("imposition", "rotation_allowed")),
             add_bleed_mm=float(config.get("imposition", "add_bleed") or 0.0),
             min_dpi=int(config.get("preflight", "min_dpi") or 300),
+            allowed_formats=str(config.get("preflight", "allowed_formats") or ""),
             icc_profile_path=str(config.get("export", "icc_profile") or ""),
             export_format=export_format,
             export_dpi=int(config.get("export", "dpi") or 300),

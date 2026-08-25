@@ -22,6 +22,7 @@ class PreflightEngine:
         item.preflight_status = PreflightStatus.PENDING
 
         try:
+            self._check_format(item, settings.allowed_formats)
             self._check_resolution(item, settings.min_dpi)
             self._check_color_mode(item, settings.force_cmyk)
             self._check_dimensions(item, settings)
@@ -50,6 +51,29 @@ class PreflightEngine:
             item.preflight_status = PreflightStatus.ERROR
 
         return item
+
+    def _check_format(self, item: FileItem, allowed_formats: str) -> None:
+        """Rejects a format the shop does not accept as input.
+
+        Blocking: unlike a low DPI or an RGB file, nothing downstream can turn
+        an unwanted format into an acceptable one — better to stop it at the
+        door than to imposition it and discover the problem at the press.
+        An empty list means "accept everything" (the default).
+        """
+        allowed = {f.strip().upper() for f in (allowed_formats or "").split(",") if f.strip()}
+        if not allowed:
+            return
+        if item.format.value.upper() not in allowed:
+            item.preflight_errors.append(
+                PreflightError(
+                    type=PreflightErrorType.FORMAT_NOT_ALLOWED,
+                    message=(
+                        f"Format {item.format.value} non autorisé "
+                        f"(formats acceptés : {', '.join(sorted(allowed))})."
+                    ),
+                    is_blocking=True,
+                )
+            )
 
     def _check_resolution(self, item: FileItem, min_dpi: int) -> None:
         if item.dpi < min_dpi:

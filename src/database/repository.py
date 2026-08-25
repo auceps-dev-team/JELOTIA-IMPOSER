@@ -23,10 +23,25 @@ class DatabaseRepository:
         self._migrate_schema()
         logger.info(f"Database initialized at {db_url}")
 
+    # Indexes the ORM declares. create_all() only ever builds a table it is
+    # creating from scratch, so an existing field database NEVER receives an
+    # index added later — every install out there would keep full-table scans.
+    # Created here instead, idempotently.
+    _INDEXES = (
+        ("ix_jobs_created_at", "jobs", "created_at"),
+        ("ix_jobs_archived", "jobs", "archived"),
+        ("ix_qr_batches_created_at", "qr_batches", "created_at"),
+        ("ix_file_items_job_id", "file_items", "job_id"),
+        ("ix_sheets_job_id", "sheets", "job_id"),
+    )
+
     def _migrate_schema(self) -> None:
-        """create_all only creates missing TABLES — it never adds new columns
-        to existing ones. Field databases predate `jobs.archived`, so add it
-        in place if absent (SQLite ALTER TABLE ADD COLUMN is cheap and safe)."""
+        """Brings an existing database up to the current ORM schema, in place.
+
+        Runs on every start because this is a desktop app: nobody runs a CLI
+        migration on the shop's machines. Covers what create_all() cannot —
+        columns added to existing tables, and indexes added later.
+        """
         added = (
             ("archived", "BOOLEAN NOT NULL DEFAULT 0"),
             ("quantities", "JSON NOT NULL DEFAULT '{}'"),
@@ -41,6 +56,12 @@ class DatabaseRepository:
                         conn.exec_driver_sql(f"ALTER TABLE jobs ADD COLUMN {name} {ddl}")
                         conn.commit()
                         logger.info(f"Schema migrated: jobs.{name} column added")
+
+                for index_name, table, column in self._INDEXES:
+                    conn.exec_driver_sql(
+                        f"CREATE INDEX IF NOT EXISTS {index_name} ON {table} ({column})"
+                    )
+                conn.commit()
         except SQLAlchemyError as e:
             logger.error(f"Schema migration failed: {e}")
 

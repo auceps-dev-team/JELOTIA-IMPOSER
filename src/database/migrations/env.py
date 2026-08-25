@@ -33,6 +33,23 @@ target_metadata = Base.metadata
 
 
 def get_url():
+    """Target database, most explicit source first.
+
+    Hardcoding the app's own path meant Alembic could only ever be pointed at
+    the live production database — impossible to test against a scratch copy,
+    and a slip of the command line hit real jobs. `-x db_url=...` and a real
+    `sqlalchemy.url` in the ini now take precedence; the app's database stays
+    the default so day-to-day usage is unchanged.
+    """
+    x_args = context.get_x_argument(as_dictionary=True)
+    if x_args.get("db_url"):
+        return x_args["db_url"]
+
+    configured = config.get_main_option("sqlalchemy.url", None)
+    # The ini ships alembic's placeholder; treat it as "not configured".
+    if configured and not configured.startswith("driver://"):
+        return configured
+
     return f"sqlite:///{app_config.db_path}"
 
 

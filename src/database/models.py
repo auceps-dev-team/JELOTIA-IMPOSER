@@ -19,7 +19,7 @@ class JobModel(Base):
     id = Column(String(36), primary_key=True, default=generate_uuid)
     name = Column(String(255), nullable=False)
     status = Column(String(50), nullable=False, default="PENDING")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
     settings = Column(JSON, nullable=False)
     stats = Column(JSON, nullable=False)
     # Original input file paths as submitted, kept so a failed/interrupted
@@ -32,7 +32,7 @@ class JobModel(Base):
     quantities = Column(JSON, nullable=False, default=dict)
     # Archived jobs are hidden from the Jobs view but kept in the DB (and
     # still count in dashboard/production history) for potential reuse.
-    archived = Column(Boolean, nullable=False, default=False)
+    archived = Column(Boolean, nullable=False, default=False, index=True)
 
     files = relationship("FileItemModel", back_populates="job", cascade="all, delete-orphan")
     sheets = relationship("SheetModel", back_populates="job", cascade="all, delete-orphan")
@@ -46,7 +46,7 @@ class QRBatchModel(Base):
     __tablename__ = "qr_batches"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
     source_name = Column(String(255), nullable=False, default="")
     template_name = Column(String(255), nullable=True)
     formats = Column(String(100), nullable=False, default="")
@@ -61,7 +61,7 @@ class FileItemModel(Base):
     __tablename__ = "file_items"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    job_id = Column(String(36), ForeignKey("jobs.id"), nullable=False)
+    job_id = Column(String(36), ForeignKey("jobs.id"), nullable=False, index=True)
     path = Column(String(1024), nullable=False)
     format = Column(String(10), nullable=False)
     width_mm = Column(Float, nullable=False)
@@ -79,7 +79,7 @@ class SheetModel(Base):
     __tablename__ = "sheets"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    job_id = Column(String(36), ForeignKey("jobs.id"), nullable=False)
+    job_id = Column(String(36), ForeignKey("jobs.id"), nullable=False, index=True)
     sheet_number = Column(Integer, nullable=False)
     width_mm = Column(Float, nullable=False)
     height_mm = Column(Float, nullable=False)

@@ -40,6 +40,7 @@ class PreflightErrorType(str, Enum):
     SIZE_MISMATCH = "SIZE_MISMATCH"
     TRANSPARENCY_DETECTED = "TRANSPARENCY_DETECTED"
     FONTS_NOT_EMBEDDED = "FONTS_NOT_EMBEDDED"
+    FORMAT_NOT_ALLOWED = "FORMAT_NOT_ALLOWED"
     NO_BLEED = "NO_BLEED"
     CORRUPTED = "CORRUPTED"
 
@@ -68,6 +69,9 @@ class JobSettings(BaseModel):
     # Preflight overrides
     min_dpi: int = 300
     force_cmyk: bool = True
+    # Comma-separated list of accepted input formats ("PDF,TIFF"). Empty = all.
+    # Set in F6·CONFIG > Preflight; was written there and read by nobody.
+    allowed_formats: str = ""
     # Absolute path to the destination CMYK ICC profile. Empty = no colour
     # management (Pillow's naive conversion, which overshoots ink limits).
     icc_profile_path: str = ""

@@ -258,15 +258,14 @@ class SettingsWidget(QWidget):
         layout.addRow("", self.cut_contour)
 
     def setup_tab_users(self):
-        tab, layout = self._create_form_tab("Utilisateurs")
-
-        self.user_role = self._style_input(QComboBox())
-        self.user_role.addItems(["Opérateur", "Admin", "Superviseur"])
+        # "Rôle actif" retiré : aucun contrôle d'accès n'existe dans le produit,
+        # et laisser le champ laissait croire à une gestion des droits. À
+        # remettre le jour où les droits sont réellement appliqués.
+        tab, layout = self._create_form_tab("Apparence")
 
         self.ui_theme = self._style_input(QComboBox())
         self.ui_theme.addItems(["dark", "light"])
 
-        layout.addRow("Rôle actif:", self.user_role)
         layout.addRow("Thème (Nécessite redémarrage):", self.ui_theme)
 
     def setup_tab_automation(self):
@@ -363,11 +362,12 @@ class SettingsWidget(QWidget):
         self.workers.setMinimum(1)
         self.workers.setMaximum(64)
 
-        self.memory_limit = self._style_input(QSpinBox())
-        self.memory_limit.setMaximum(64000)
-
-        layout.addRow("Nombre de Workers (threads):", self.workers)
-        layout.addRow("Limite mémoire (Mo):", self.memory_limit)
+        # "Limite mémoire" retirée : aucune limite n'était appliquée nulle part.
+        self.workers.setToolTip(
+            "Nombre de processus de traitement en parallèle.\n"
+            "Pris en compte au prochain démarrage de l'application."
+        )
+        layout.addRow("Nombre de Workers (processus):", self.workers)
 
     def setup_bottom_actions(self):
         layout = QHBoxLayout()
@@ -441,13 +441,7 @@ class SettingsWidget(QWidget):
         stored = self.config.get("export", "icc_profile") or ""
         self._populate_icc_profiles(selected=stored if Path(stored).is_file() else "")
 
-        # Users
-        role = self.config.get("users", "role")
-        if role:
-            idx = self.user_role.findText(role)
-            if idx >= 0:
-                self.user_role.setCurrentIndex(idx)
-
+        # Apparence
         theme = self.config.get("ui", "theme")
         if theme:
             idx = self.ui_theme.findText(theme)
@@ -462,7 +456,6 @@ class SettingsWidget(QWidget):
 
         # Performance
         self.workers.setValue(self.config.get("performance", "workers") or 4)
-        self.memory_limit.setValue(self.config.get("performance", "memory_limit_mb") or 4096)
 
     def save_settings(self):
         # Paths
@@ -504,7 +497,6 @@ class SettingsWidget(QWidget):
         self.config.set("export", "icc_profile", self.icc_profile.currentData() or "")
 
         # Users & UI
-        self.config.set("users", "role", self.user_role.currentText())
         self.config.set("ui", "theme", self.ui_theme.currentText())
 
         # Automation
@@ -515,7 +507,6 @@ class SettingsWidget(QWidget):
 
         # Performance
         self.config.set("performance", "workers", self.workers.value())
-        self.config.set("performance", "memory_limit_mb", self.memory_limit.value())
 
         self.config.save()
         QMessageBox.information(self, "Succès", "Configuration sauvegardée.")
