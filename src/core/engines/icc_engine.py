@@ -1,15 +1,26 @@
 """Real ICC colour management.
 
 `img.convert("CMYK")` in Pillow is a naive formula (C = 255 - R …), not a
-colorimetric conversion, and it is actively harmful for print. Measured on
-pure black with the SWOP profile:
+colorimetric conversion, and it is actively harmful for print: it lays down
+roughly equal amounts of all four inks whatever the press, ~300 % on a pure
+black. This module routes conversions through littleCMS (Pillow's ImageCms)
+with real profiles instead.
 
-    naive : C255 M255 J255 N0  -> 300 % total ink
-    ICC   : C0   M0   J0   N255 -> 100 %, clean 100K black
+What the profile then produces is the PRESS CONDITION's business, not ours —
+measured on a pure black:
 
-300 % ink floods the media, never dries, and gets a job rejected by the RIP.
-This module routes conversions through littleCMS (Pillow's ImageCms) with real
-profiles instead, and can measure total ink coverage (TAC) afterwards.
+    naive                 C255 M255 J255 N0   -> 300 % ink, meaningless
+    SWOP                  C0   M0   J0   N255 -> 100 %, clean 100K
+    ISO Coated v2/FOGRA39 C216 M198 J185 N242 -> 330 %, rich black (in spec)
+
+Both profiled results are correct for their condition. Do not assume a
+conversion "should" come out at 100K — an earlier version of this note did, and
+tests written against it broke the moment a coated-offset profile was used.
+
+CAUTION, currently unenforced: FOGRA39's 330 % suits sheet-fed offset on coated
+stock, NOT the digital and large-format work this shop does, where that much ink
+floods the media and never dries. `total_ink_coverage()` below measures TAC but
+nothing in the pipeline calls it — no ink limit is applied anywhere.
 
 PDFs are out of scope here: converting their content colorimetrically needs a
 full RIP (Ghostscript). The export engine already tags them with an

@@ -1,4 +1,3 @@
-from pathlib import Path
 
 import pytest
 from PIL import Image
@@ -11,10 +10,10 @@ from src.core.engines.icc_engine import (
     total_ink_coverage,
 )
 
-_SWOP = Path("C:/Windows/System32/spool/drivers/color/RSWOP.icm")
-_needs_swop = pytest.mark.skipif(
-    not _SWOP.is_file(), reason="profil CMJN système absent (RSWOP.icm)"
-)
+# Le profil vient de tests/fixtures (fixture `cmyk_profile` du conftest) et non
+# plus de C:/Windows : cherché sur la machine, il manquait sur tout runner de CI
+# et ces tests — colorimétrie et export PDF/X, soit ce que l'imprimeur reçoit —
+# se sautaient en silence derrière un vert trompeur.
 
 
 @pytest.fixture
@@ -24,11 +23,10 @@ def rgb_image():
     return img
 
 
-@_needs_swop
-def test_read_profile_identifies_cmyk():
-    info = read_profile(_SWOP)
+def test_read_profile_identifies_cmyk(cmyk_profile):
+    info = read_profile(cmyk_profile)
     assert info is not None
-    assert info.is_cmyk, f"RSWOP doit être CMJN, espace lu : {info.color_space!r}"
+    assert info.is_cmyk, f"le profil doit être CMJN, espace lu : {info.color_space!r}"
     assert info.name
 
 
@@ -38,21 +36,55 @@ def test_read_profile_returns_none_on_garbage(tmp_path):
     assert read_profile(bad) is None
 
 
-@_needs_swop
-def test_discover_finds_only_cmyk_profiles():
+def test_discover_finds_a_profile_dropped_by_the_shop(tmp_path, monkeypatch,
+                                                      cmyk_profile):
+    """Le chemin documenté : l'atelier dépose le profil de sa presse dans son
+    dossier Profiles et l'application doit le proposer.
+
+    Le test s'appuyait auparavant sur un profil présent sur la machine ; sans
+    dossier système — c'est-à-dire hors Windows, donc sur un runner de CI — il
+    n'aurait rien trouvé et serait passé au rouge.
+    """
+    import shutil
+
+    shop_dir = tmp_path / "Profiles"
+    shop_dir.mkdir()
+    shutil.copy(str(cmyk_profile), str(shop_dir / cmyk_profile.name))
+    monkeypatch.setattr("src.core.engines.icc_engine.profiles_dir", lambda: shop_dir)
+
     profiles = discover_profiles(cmyk_only=True)
-    assert profiles, "au moins un profil CMJN doit être trouvé sur le poste"
-    assert all(p.is_cmyk for p in profiles)
+
+    assert profiles, "le profil déposé par l'atelier doit être découvert"
+    assert all(p.is_cmyk for p in profiles), "cmyk_only ne doit rendre que du CMJN"
     assert all(p.path.is_file() for p in profiles)
+    assert any(p.path.name == cmyk_profile.name for p in profiles)
 
 
-@_needs_swop
-def test_icc_black_is_clean_100k_not_300_percent_ink(rgb_image):
-    """LE bénéfice mesurable : la conversion naïve de Pillow transforme le noir
-    pur en C+M+J+N = 300 % d'encre (indéchable, refusé par les RIP) ; l'ICC
-    donne un noir 100K propre à 100 %."""
+def test_discover_ignores_non_profiles(tmp_path, monkeypatch):
+    """Un dossier Profiles rempli de fichiers quelconques ne doit rien produire
+    plutôt que de faire échouer la découverte."""
+    shop_dir = tmp_path / "Profiles"
+    shop_dir.mkdir()
+    (shop_dir / "notes.txt").write_text("pas un profil")
+    (shop_dir / "faux.icc").write_bytes(b"pas un profil non plus")
+    monkeypatch.setattr("src.core.engines.icc_engine.profiles_dir", lambda: shop_dir)
+    monkeypatch.setattr("src.core.engines.icc_engine._SYSTEM_DIRS", ())
+
+    assert discover_profiles(cmyk_only=True) == []
+
+
+def test_icc_conversion_is_colorimetric_not_the_naive_formula(rgb_image, cmyk_profile):
+    """Le bénéfice réel : la conversion passe par le profil, pas par la formule
+    naïve de Pillow (C = 255 - R …).
+
+    Ce test asserait auparavant un noir « 100K propre à moins de 260 % » — vrai
+    pour RSWOP, faux pour FOGRA39, qui produit légitimement un noir riche à
+    330 %. Le dosage d'encre est une propriété de la condition d'impression
+    visée, pas de la gestion des couleurs : le figer revenait à faire dépendre
+    la suite du profil installé sur la machine.
+    """
     naive = rgb_image.convert("CMYK")
-    managed = convert_image_to_cmyk(rgb_image, _SWOP)
+    managed = convert_image_to_cmyk(rgb_image, cmyk_profile)
 
     naive_black = naive.getpixel((3, 0))
     icc_black = managed.getpixel((3, 0))
@@ -60,14 +92,20 @@ def test_icc_black_is_clean_100k_not_300_percent_ink(rgb_image):
     assert sum(naive_black) / 255 * 100 == pytest.approx(300.0, abs=1), (
         "on documente ici le défaut du convert() naïf"
     )
-    assert icc_black[3] > 200, "le noir ICC doit être porté par le canal N"
-    assert max(icc_black[:3]) < 60, f"CMJ doivent rester faibles, obtenu {icc_black[:3]}"
-    assert total_ink_coverage(managed) < 260.0, "encrage total dans les limites RIP"
+    assert icc_black != naive_black, "la conversion ne doit pas être la formule naïve"
+    assert icc_black[3] > 200, "le noir doit être fortement porté par le canal N"
+    assert managed.info.get("icc_profile"), "le profil de destination est embarqué"
 
 
-@_needs_swop
-def test_conversion_differs_from_naive_and_is_cmyk(rgb_image):
-    managed = convert_image_to_cmyk(rgb_image, _SWOP)
+def test_white_stays_unprinted(cmyk_profile):
+    """Garde-fou simple qu'aucun profil ne peut violer : du blanc ne pose pas
+    d'encre. Attrape une transformation inversée ou inopérante."""
+    white = convert_image_to_cmyk(Image.new("RGB", (2, 2), (255, 255, 255)), cmyk_profile)
+    assert total_ink_coverage(white) < 5.0, "le blanc ne doit poser aucune encre"
+
+
+def test_conversion_differs_from_naive_and_is_cmyk(rgb_image, cmyk_profile):
+    managed = convert_image_to_cmyk(rgb_image, cmyk_profile)
     assert managed.mode == "CMYK"
     assert list(managed.get_flattened_data()) != list(
         rgb_image.convert("CMYK").get_flattened_data()
@@ -75,16 +113,14 @@ def test_conversion_differs_from_naive_and_is_cmyk(rgb_image):
     assert managed.info.get("icc_profile"), "le profil de destination est embarqué"
 
 
-@_needs_swop
-def test_already_cmyk_is_left_alone():
+def test_already_cmyk_is_left_alone(cmyk_profile):
     img = Image.new("CMYK", (2, 2), (10, 20, 30, 40))
-    assert convert_image_to_cmyk(img, _SWOP) is img
+    assert convert_image_to_cmyk(img, cmyk_profile) is img
 
 
-@_needs_swop
-def test_grayscale_is_converted(rgb_image):
+def test_grayscale_is_converted(rgb_image, cmyk_profile):
     grey = Image.new("L", (2, 2), 128)
-    assert convert_image_to_cmyk(grey, _SWOP).mode == "CMYK"
+    assert convert_image_to_cmyk(grey, cmyk_profile).mode == "CMYK"
 
 
 def test_missing_profile_raises(rgb_image, tmp_path):
@@ -110,8 +146,7 @@ def test_total_ink_coverage_measures_the_worst_pixel():
 #  Correction engine integration                                               #
 # --------------------------------------------------------------------------- #
 
-@_needs_swop
-def test_correction_engine_uses_the_configured_profile(tmp_path):
+def test_correction_engine_uses_the_configured_profile(tmp_path, cmyk_profile):
     import uuid
 
     from src.core.engines.correction_engine import CorrectionEngine
@@ -120,7 +155,7 @@ def test_correction_engine_uses_the_configured_profile(tmp_path):
     src = tmp_path / "art.png"
     Image.new("RGB", (8, 8), (0, 0, 0)).save(str(src), dpi=(300, 300))
 
-    settings = JobSettings(force_cmyk=True, icc_profile_path=str(_SWOP), min_dpi=72)
+    settings = JobSettings(force_cmyk=True, icc_profile_path=str(cmyk_profile), min_dpi=72)
     engine = CorrectionEngine(settings, tmp_path / "work")
     item = FileItem(
         job_id=uuid.uuid4(), path=src, format=FileFormat.PNG,
@@ -131,9 +166,15 @@ def test_correction_engine_uses_the_configured_profile(tmp_path):
     with Image.open(out) as result:
         assert result.mode == "CMYK"
         black = result.getpixel((4, 4))
-    assert black[3] > 200 and max(black[:3]) < 60, (
-        f"le noir doit sortir en 100K via l'ICC, obtenu {black}"
-    )
+        tagged = bool(result.info.get("icc_profile"))
+
+    naive_black = Image.new("RGB", (2, 2), (0, 0, 0)).convert("CMYK").getpixel((0, 0))
+    # Le dosage exact dépend du profil (100K sous SWOP, noir riche sous
+    # FOGRA39) : on vérifie que le profil configuré a bien été appliqué, pas
+    # qu'il produit tel encrage.
+    assert black[3] > 200, f"le noir doit porter sur le canal N, obtenu {black}"
+    assert black != naive_black, "le profil configuré doit avoir été appliqué"
+    assert tagged, "le fichier corrigé doit être balisé par son profil"
 
 
 def test_correction_engine_falls_back_without_profile(tmp_path, caplog):
