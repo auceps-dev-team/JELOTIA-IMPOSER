@@ -158,16 +158,85 @@ def convert_image_to_cmyk(image, dest_profile: Path, intent: int = INTENT_PERCEP
 def total_ink_coverage(image) -> float:
     """Highest total ink coverage in the image, in % (C+M+Y+K).
 
-    Above ~300 % the ink no longer dries and RIPs reject the file — this is the
-    number the naive conversion silently blows past on blacks.
+    Per-channel histograms cannot answer this: the four inks must be summed on
+    the SAME pixel, so the worst pixel has to be found across the whole image.
+
+    Vectorised through numpy because the obvious Python loop costs ~0.65 s per
+    megapixel — some 45 s on an A1 sheet at 300 dpi. That is almost certainly
+    why this function sat unused: too slow to call anywhere real. The pure
+    Python path is kept as a fallback and gives identical results.
     """
     if image.mode != "CMYK":
         return 0.0
-    # Per-channel histograms can't answer this: the four inks must be summed on
-    # the SAME pixel, so walk the data once and keep the worst.
-    worst = 0
-    for pixel in image.get_flattened_data():
-        total = sum(pixel)
-        if total > worst:
-            worst = total
+
+    try:
+        import numpy as np
+
+        # uint16: four channels sum up to 1020 and would wrap around in uint8.
+        channels = np.asarray(image, dtype=np.uint16)
+        if channels.ndim != 3 or channels.shape[2] < 4:
+            raise ValueError("image CMJN attendue")
+        worst = int(channels.sum(axis=2).max())
+    except Exception:
+        worst = 0
+        for pixel in image.get_flattened_data():
+            total = sum(pixel)
+            if total > worst:
+                worst = total
+
     return worst / 255.0 * 100.0
+
+
+# Above this, ink stops drying on the media and the job is refused or smears.
+# 300 % is the figure the trade quotes for coated offset; digital and
+# large-format want appreciably less, which is why it is configurable.
+DEFAULT_MAX_INK_COVERAGE = 300.0
+
+# Ink coverage comes from large solid areas, which survive downsampling, so the
+# artwork is measured at a deliberately low resolution: a page renders in a few
+# hundredths of a second instead of seconds. Hairlines could be averaged away,
+# but a hairline never drives TAC.
+_INK_PROBE_DPI = 72
+
+
+def estimate_ink_coverage(path, dest_profile=None) -> float:
+    """Total ink coverage (%) the artwork at `path` would lay down.
+
+    Rendered small and converted through `dest_profile` — the same profile the
+    export will use, since ink load is decided by the press condition, not by
+    the file. Returns 0.0 when it cannot be measured: this feeds a warning, and
+    a probe failure must never fail a job.
+    """
+    from pathlib import Path
+
+    from PIL import Image
+
+    path = Path(path)
+    try:
+        if path.suffix.lower() == ".pdf":
+            import fitz
+
+            doc = fitz.open(str(path))
+            try:
+                if not len(doc):
+                    return 0.0
+                zoom = _INK_PROBE_DPI / 72.0
+                pix = doc[0].get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
+                image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+            finally:
+                doc.close()
+        else:
+            image = Image.open(str(path))
+            image.thumbnail((1200, 1200))
+
+        if image.mode != "CMYK":
+            if dest_profile is None:
+                # Without a profile we would be measuring Pillow's naive
+                # formula, which says nothing about the real press.
+                return 0.0
+            image = convert_image_to_cmyk(image, dest_profile)
+
+        return total_ink_coverage(image)
+    except Exception as e:
+        logger.debug(f"Encrage non mesurable ({path.name}) : {e}")
+        return 0.0

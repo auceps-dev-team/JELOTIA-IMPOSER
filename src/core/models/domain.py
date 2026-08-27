@@ -41,6 +41,7 @@ class PreflightErrorType(str, Enum):
     TRANSPARENCY_DETECTED = "TRANSPARENCY_DETECTED"
     FONTS_NOT_EMBEDDED = "FONTS_NOT_EMBEDDED"
     FORMAT_NOT_ALLOWED = "FORMAT_NOT_ALLOWED"
+    INK_LIMIT_EXCEEDED = "INK_LIMIT_EXCEEDED"
     NO_BLEED = "NO_BLEED"
     CORRUPTED = "CORRUPTED"
 
@@ -75,6 +76,10 @@ class JobSettings(BaseModel):
     # Absolute path to the destination CMYK ICC profile. Empty = no colour
     # management (Pillow's naive conversion, which overshoots ink limits).
     icc_profile_path: str = ""
+    # Total ink coverage ceiling (C+M+Y+K, %). Above it the ink stops drying and
+    # the job smears or is refused. 300 % suits coated offset; digital and large
+    # format want less. 0 disables the check.
+    max_ink_coverage: float = 300.0
 
     # Export Settings
     export_format: str = "PDF/X-1a"

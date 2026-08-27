@@ -169,6 +169,7 @@ class MainWindow(QMainWindow):
             min_dpi=int(config.get("preflight", "min_dpi") or 300),
             allowed_formats=str(config.get("preflight", "allowed_formats") or ""),
             icc_profile_path=str(config.get("export", "icc_profile") or ""),
+            max_ink_coverage=float(config.get("preflight", "max_ink_coverage") or 300.0),
             export_format=export_format,
             export_dpi=int(config.get("export", "dpi") or 300),
             generate_thumbnail=True,
@@ -184,6 +185,40 @@ class MainWindow(QMainWindow):
 
     # Priority labels (JobDialog) -> queue rank (WorkerPoolManager).
     _PRIORITY_RANKS = {"Urgente": 0, "Haute": 1, "Normale": 2}
+
+    # What the operator can actually DO about each preflight finding. A generic
+    # "check the source file" is useless advice for, say, an ink limit: the fix
+    # is a profile or a black-generation choice, not the file.
+    _PREFLIGHT_ADVICE = {
+        "INK_LIMIT_EXCEEDED": (
+            "Encrage trop élevé pour le support. Vérifiez le profil ICC choisi "
+            "(un profil offset couché encre bien plus qu'un profil numérique), "
+            "ou demandez un noir moins riche au graphiste."
+        ),
+        "FORMAT_NOT_ALLOWED": (
+            "Demandez le fichier dans un format accepté, ou élargissez la liste "
+            "dans F6·CONFIG > Preflight."
+        ),
+        "FONTS_NOT_EMBEDDED": (
+            "Demandez un PDF avec polices embarquées (ou vectorisées) : sinon le "
+            "RIP substituera la police et le rendu changera."
+        ),
+        "TRANSPARENCY_DETECTED": (
+            "Aplatissez la transparence à l'export, ou exportez en PDF/X-1a."
+        ),
+        "RESOLUTION_LOW": (
+            "Demandez le fichier à une résolution supérieure : agrandir ne "
+            "recrée pas le détail manquant."
+        ),
+        "WRONG_COLOR_MODE": (
+            "Converti automatiquement en CMJN via le profil configuré ; "
+            "vérifiez le rendu des couleurs vives."
+        ),
+        "SIZE_MISMATCH": (
+            "Le fichier dépasse la planche : réduisez sa taille, ou choisissez "
+            "une planche plus grande dans la gamme."
+        ),
+    }
 
     def _submit_job(
         self,
@@ -322,7 +357,9 @@ class MainWindow(QMainWindow):
                     {
                         "type": e.type.value,
                         "desc": e.message,
-                        "solution": "Vérifiez le fichier source.",
+                        "solution": self._PREFLIGHT_ADVICE.get(
+                            e.type.value, "Vérifiez le fichier source."
+                        ),
                     }
                     for e in f.preflight_errors
                 ]

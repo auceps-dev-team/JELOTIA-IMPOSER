@@ -201,8 +201,19 @@ class SettingsWidget(QWidget):
 
         self.allowed_formats = self._style_input(QLineEdit())
 
+        self.max_ink = self._style_input(QSpinBox())
+        self.max_ink.setRange(0, 400)
+        self.max_ink.setSuffix(" %")
+        self.max_ink.setSpecialValueText("désactivé")
+        self.max_ink.setToolTip(
+            "Encrage total maximal (C+M+J+N) accepté avant avertissement.\n"
+            "300 % convient à l'offset couché ; le numérique et le grand format\n"
+            "demandent souvent moins. Nécessite un profil ICC configuré."
+        )
+
         layout.addRow("Résolution minimale (DPI):", self.min_dpi)
         layout.addRow("Formats autorisés (séparés par virgule):", self.allowed_formats)
+        layout.addRow("Encrage total maximal:", self.max_ink)
 
     def setup_tab_export(self):
         tab, layout = self._create_form_tab("Exportation")
@@ -413,6 +424,7 @@ class SettingsWidget(QWidget):
         # Preflight
         self.min_dpi.setValue(self.config.get("preflight", "min_dpi") or 300)
         self.allowed_formats.setText(self.config.get("preflight", "allowed_formats") or "")
+        self.max_ink.setValue(int(self.config.get("preflight", "max_ink_coverage") or 300))
 
         # Export
         fmt = self.config.get("export", "format")
@@ -480,6 +492,7 @@ class SettingsWidget(QWidget):
         # Preflight
         self.config.set("preflight", "min_dpi", self.min_dpi.value())
         self.config.set("preflight", "allowed_formats", self.allowed_formats.text())
+        self.config.set("preflight", "max_ink_coverage", self.max_ink.value())
 
         # Export
         self.config.set("export", "format", self.export_format.currentText())

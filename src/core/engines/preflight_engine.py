@@ -26,6 +26,7 @@ class PreflightEngine:
             self._check_resolution(item, settings.min_dpi)
             self._check_color_mode(item, settings.force_cmyk)
             self._check_dimensions(item, settings)
+            self._check_ink_coverage(item, settings)
 
             # Deep checks for PDFs
             if item.format == FileFormat.PDF:
@@ -92,6 +93,42 @@ class PreflightEngine:
                     type=PreflightErrorType.WRONG_COLOR_MODE,
                     message=f"Color mode is {item.color_mode.value}, expected CMYK.",
                     is_blocking=False,  # Treat as warning, Correction Engine will convert
+                )
+            )
+
+    def _check_ink_coverage(self, item: FileItem, settings: JobSettings) -> None:
+        """Warns when the artwork would lay down more ink than the media takes.
+
+        The measurement depends on the destination profile, not on the file: the
+        same black comes out at 100 % under SWOP and 330 % under FOGRA39. So it
+        is only meaningful once a profile is configured — without one, nothing
+        is claimed rather than reporting a figure from Pillow's naive formula.
+
+        A warning, never blocking: an operator may knowingly accept a heavy
+        coverage. What must not happen is discovering it at the press.
+        """
+        limit = settings.max_ink_coverage
+        if limit <= 0 or not settings.icc_profile_path:
+            return
+        from pathlib import Path as _Path
+
+        from src.core.engines.icc_engine import estimate_ink_coverage
+
+        profile = _Path(settings.icc_profile_path)
+        if not profile.is_file():
+            return
+
+        coverage = estimate_ink_coverage(item.path, profile)
+        if coverage > limit:
+            item.preflight_errors.append(
+                PreflightError(
+                    type=PreflightErrorType.INK_LIMIT_EXCEEDED,
+                    message=(
+                        f"Encrage total {coverage:.0f} % — au-delà de la limite "
+                        f"de {limit:.0f} %. L'encre risque de ne pas sécher "
+                        f"(profil : {profile.stem})."
+                    ),
+                    is_blocking=False,
                 )
             )
 
