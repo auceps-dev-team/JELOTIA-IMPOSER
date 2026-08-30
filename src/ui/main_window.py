@@ -702,6 +702,23 @@ class MainWindow(QMainWindow):
         (one folder = one product preset). All monitors feed the same
         AutoProcessor, which keeps their files apart by rule."""
         from src.core.auto_processor import AutoProcessor
+
+        self.auto_processor = AutoProcessor(self)
+        self.auto_processor.job_grouped.connect(self._handle_hot_folder_job)
+        self.auto_processor.start()
+
+        watched = self._start_hot_folder_monitors()
+        if watched > 1:
+            self._log(f"{watched - 1} dossier(s) surveillé(s) avec gamme")
+
+    def _start_hot_folder_monitors(self) -> int:
+        """Starts one monitor on the default input folder plus one per active
+        watch rule, and returns how many folders are watched.
+
+        Shared by the initial setup and by the restart after the rules are
+        edited: the two used to carry ~40 identical lines each, so any fix had
+        to be made twice or silently applied to only one of the paths.
+        """
         from src.core.hot_folder_monitor import HotFolderMonitor
         from src.core.watch_rules import active_rules, ensure_folders
         from src.utils.config_manager import ConfigManager
@@ -712,12 +729,8 @@ class MainWindow(QMainWindow):
         )
         processing_path = str(Path(input_path).parent / "Processing")
 
-        self.auto_processor = AutoProcessor(self)
-        self.auto_processor.job_grouped.connect(self._handle_hot_folder_job)
-        self.auto_processor.start()
-
-        # Default folder: rule_id "" → global settings (unchanged behaviour).
         self.hf_monitors = []
+        # Default folder: rule_id "" → global settings.
         self.hf_monitor = HotFolderMonitor(input_path, processing_path)
         self.hf_monitor.signals.new_job_ready.connect(self.auto_processor.add_file)
         self.hf_monitor.start()
@@ -733,44 +746,19 @@ class MainWindow(QMainWindow):
                 self.hf_monitors.append(monitor)
             except Exception as e:
                 self._log(f"Surveillance impossible pour « {rule.name} » : {e}")
-        if rules:
-            self._log(f"{len(rules)} dossier(s) surveillé(s) avec gamme")
+
+        return len(self.hf_monitors)
 
     def restart_hot_folder_monitors(self):
         """Applies edited watch rules without restarting the application."""
         for monitor in getattr(self, "hf_monitors", []):
             try:
                 monitor.stop()
-            except Exception:
-                pass
-        self.hf_monitors = []
-
-        from src.core.hot_folder_monitor import HotFolderMonitor
-        from src.core.watch_rules import active_rules, ensure_folders
-        from src.utils.config_manager import ConfigManager
-
-        config = ConfigManager()
-        input_path = config.get("paths", "input") or str(
-            Path.home() / "Jelotia" / "HotFolder" / "Input"
-        )
-        processing_path = str(Path(input_path).parent / "Processing")
-
-        self.hf_monitor = HotFolderMonitor(input_path, processing_path)
-        self.hf_monitor.signals.new_job_ready.connect(self.auto_processor.add_file)
-        self.hf_monitor.start()
-        self.hf_monitors.append(self.hf_monitor)
-
-        rules = active_rules()
-        ensure_folders(rules)
-        for rule in rules:
-            try:
-                monitor = HotFolderMonitor(rule.folder, processing_path, rule_id=str(rule.id))
-                monitor.signals.new_job_ready.connect(self.auto_processor.add_file)
-                monitor.start()
-                self.hf_monitors.append(monitor)
             except Exception as e:
-                self._log(f"Surveillance impossible pour « {rule.name} » : {e}")
-        self._log(f"Surveillance relancée — {len(self.hf_monitors)} dossier(s)")
+                self._log(f"Arrêt d'un dossier surveillé impossible : {e}")
+
+        watched = self._start_hot_folder_monitors()
+        self._log(f"Surveillance relancée — {watched} dossier(s)")
 
     def _handle_hot_folder_job(self, group_name: str, files: list, rule_id: str = ""):
         """A hot folder produced a group: the watched folder's rule decides the

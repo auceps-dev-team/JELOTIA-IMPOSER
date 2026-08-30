@@ -30,3 +30,7 @@ coverage.xml
 htmlcov/
 scratch/
 graphify-out/
+
+# Sorties regenerables de scripts/integration_tests.py
+integration_test_data/
+test_planche.pdf

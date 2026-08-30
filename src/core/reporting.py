@@ -87,6 +87,7 @@ def export_production_xlsx(report: ProductionReport, out_path: Path) -> Path:
     """Writes the report as a formatted Excel sheet (headers, rows, totals)."""
     import openpyxl
     from openpyxl.styles import Font
+    from openpyxl.utils import get_column_letter
 
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -126,9 +127,12 @@ def export_production_xlsx(report: ProductionReport, out_path: Path) -> Path:
     for cell in ws[ws.max_row]:
         cell.font = Font(bold=True)
 
+    # get_column_letter, pas chr(64 + index) : au-delà de 26 colonnes ce dernier
+    # produit "[", "\\", "]"… au lieu de "AA", "AB". Neuf colonnes aujourd'hui,
+    # mais le jour où le rapport s'élargit le bug serait silencieux.
     widths = [17, 34, 10, 9, 9, 8, 13, 15, 11]
     for index, width in enumerate(widths, start=1):
-        ws.column_dimensions[chr(64 + index)].width = width
+        ws.column_dimensions[get_column_letter(index)].width = width
 
     wb.save(str(out_path))
     return out_path

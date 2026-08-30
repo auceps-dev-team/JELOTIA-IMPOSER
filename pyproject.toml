@@ -1,30 +1,35 @@
 [project]
 name = "jelotia-imposer"
-version = "1.42.0"
+version = "1.43.0"
 description = "Logiciel Professionnel d'Imposition Automatique Industrielle"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.14.0",
-    "colorama>=0.4.6",
-    "colour-science>=0.4.4",
     "loguru>=0.7.3",
-    "opencv-python>=4.10.0",
+    # Utilisé directement par icc_engine.total_ink_coverage : la mesure
+    # d'encrage coûtait ~45 s par planche A1 en Python pur. numpy n'arrivait
+    # jusque-là que par opencv-python/shapely, retirées ci-dessous — sans
+    # déclaration explicite, le calcul serait silencieusement retombé sur la
+    # boucle lente.
+    "numpy>=2.0",
     "pikepdf>=9.4.2",
     "pillow>=11.0.0",
     "pydantic>=2.10.4",
     "pymupdf==1.28.0",
     "pyside6>=6.8.1",
-    "pyqtgraph>=0.13.3",
     "qrcode>=8.0",
     "rectpack>=0.2.2",
     "reportlab>=4.2.5",
-    "shapely>=2.0.6",
     "sqlalchemy>=2.0.36",
     "watchdog>=6.0.0",
     "openpyxl>=3.1.5",
     "cryptography>=49.0.0",
 ]
+# Retirées (audit §6.5) : aucun `import` dans tout le dépôt.
+#   opencv-python (~60 Mo), colour-science, pyqtgraph, shapely, colorama.
+# opencv-python à lui seul alourdissait l'installeur de plusieurs dizaines de Mo.
+# pyqtgraph était déclarée alors que dashboard.py dessine son graphique à la main.
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

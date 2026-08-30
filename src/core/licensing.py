@@ -36,9 +36,19 @@ PUBLIC_KEY_B64 = "Vdc4HOyK/zebWtK84nU1C38x/+BsD5gC6gb4oHexloE="
 
 # Features gated to Enterprise. Referenced by name so the UI can ask
 # license.allows("ganging") without importing anything else.
-ENTERPRISE_FEATURES = frozenset(
-    {"ganging", "watch_rules", "reports", "api", "multi_post"}
-)
+#
+# "multi_post" USED TO BE LISTED HERE and was never checked anywhere — which
+# read either as a paid feature given away, or as a dead entry. It was the
+# latter: the single-workstation restriction is real but enforced differently,
+# by binding a Personnel licence to a machine fingerprint (see parse_license).
+# A flag nobody reads only obscures that.
+ENTERPRISE_FEATURES = frozenset({"ganging", "watch_rules", "reports", "api"})
+
+# Declared above but not built yet: there is no product API to gate today (it
+# is the E1 roadmap item; the activation server is vendor-side infrastructure,
+# not a customer feature). Listed explicitly so the gate is not forgotten the
+# day it ships — a test asserts every OTHER Enterprise feature is really gated.
+UNIMPLEMENTED_FEATURES = frozenset({"api"})
 
 # Restricted defaults when no valid license is present.
 UNLICENSED_MAX_FILES_PER_DAY = 50
