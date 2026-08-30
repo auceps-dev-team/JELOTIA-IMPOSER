@@ -7,9 +7,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/auceps-dev-team/JELOTIA-IMPOSER"><img src="https://img.shields.io/badge/version-1.43.0-blue.svg" alt="Version 1.43.0" /></a>
+  <a href="https://github.com/auceps-dev-team/JELOTIA-IMPOSER"><img src="https://img.shields.io/badge/version-1.44.0-blue.svg" alt="Version 1.44.0" /></a>
   <a href="https://github.com/auceps-dev-team/JELOTIA-IMPOSER/actions"><img src="https://img.shields.io/badge/build-passing-brightgreen.svg" alt="Build Status" /></a>
-  <a href="#-documentation-des-tests--qa"><img src="https://img.shields.io/badge/coverage-85%25-success.svg" alt="Test Coverage" /></a>
+  <a href="#-documentation-des-tests--qa"><img src="https://img.shields.io/badge/coverage-mesur%C3%A9e%20en%20CI-informational.svg" alt="Couverture mesuree en CI" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Proprietary%20%2F%20Jelotia%20SARL-red.svg" alt="License" /></a>
   <a href="#-pourquoi-jelotia-imposer"><img src="https://img.shields.io/badge/Made%20in-%F0%9F%87%A8%F0%9F%87%BE%20C%C3%B4te%20d'Ivoire-orange.svg" alt="Made in Côte d'Ivoire" /></a>
   <a href="#-export-multi-format--compatibilité-rips"><img src="https://img.shields.io/badge/RIPs-Maintop_%7C_Caldera_%7C_Onyx_%7C_Wasatch-blueviolet.svg" alt="RIP Compatibility" /></a>
@@ -56,7 +56,7 @@ Dans une imprimerie moderne haute cadence, le traitement manuel des fichiers de 
 
 **Jelotia Imposer** résout définitivement ces défis à travers 3 piliers fondateurs :
 
-- ⚡ **Cadence Industrielle** : Traitement automatique et continu jusqu'à **10 000 fichiers par jour** via des dossiers surveillés (Hot Folders 24/7) et un pipeline distribué sans aucun blocage d'interface.
+- ⚡ **Cadence Industrielle** : Traitement automatique et continu jusqu'à **10 000 fichiers par jour** via des dossiers surveillés (Hot Folders 24/7) et un pipeline distribué qui traite les jobs hors du thread d'interface.
 - 🎯 **Précision Zéro Défaut** : Vérification qualité automatisée (Preflight), conversion colorimétrique ICC certifiée, rééchantillonnage et ajout dynamique de fond perdu (bleed).
 - 💰 **Rentabilité Maximisée** : Algorithme de Nesting 2D (MaxRects & Guillotine bin packing) garantissant un taux de remplissage cible **≥ 75%**, réduisant drastiquement les chutes de médias coûteux.
 
@@ -123,7 +123,7 @@ uv run main.py
 | Fonctionnalité | Description |
 |---|---|
 | **Hot Folder Automation** | Surveillance 24/7 d'un répertoire d'entrée via `watchdog` — le dépôt de fichiers déclenche instantanément le traitement |
-| **Preflight 6 Axes** | Contrôle de la résolution (DPI), mode couleur (CMJN vs RGB), transparence, polices embarquées, dimensions et fond perdu |
+| **Preflight 7 Axes** | Résolution (DPI), mode couleur (CMJN vs RGB), transparence, polices embarquées, dimensions, format autorisé et encrage total (TAC) |
 | **Auto-Correction ICC & Bleed** | Conversion RGB → CMJN avec profil ICC, rééchantillonnage intelligent et ajout dynamique de fond perdu (2mm à 5mm) |
 | **Nesting 2D MaxRects & Guillotine** | Bin packing optimisé (BSSF, BLSF, BAF, FFDH) réduisant les chutes avec taux de remplissage cible ≥ 75% |
 | **Repères Graphtec ARMS** | Génération automatique des repères de repérage optique Type 1 et Type 2 pour traceurs de découpe Graphtec |
@@ -132,7 +132,7 @@ uv run main.py
 | **Export Multi-Format RIP** | Génération directe vers PDF/X-1a, PDF/X-4, PDF Standard, TIFF LZW/RAW et JPEG Haute Qualité (95%) |
 | **Tickets de Job JDF Lite XML** | Production automatique de fichiers XML JDF accompagnant chaque planche pour l'automatisation du RIP |
 | **QR Code & Badges** | Module de génération de QR codes automatiques et imposition optimisée de planches de badges |
-| **Serveur de Licences Cryptographique** | Authentification en ligne/hors-ligne avec licences signées cryptographiquement (RSA / AES-256) et empreinte machine |
+| **Serveur de Licences Cryptographique** | Authentification en ligne/hors-ligne avec licences signées **Ed25519** et empreinte machine |
 | **Interface PySide6 (Qt 6.8)** | Interface utilisateur réactive avec thèmes clair et sombre, visualiseur de planches et filtres interactifs |
 
 ---
@@ -230,7 +230,7 @@ Jelotia Imposer comprend un système d'activation et de gestion des licences d'e
 
 - **Serveur d'Activation Dédié (`activation_server/`)** : Service web léger développé avec FastAPI, Uvicorn et Cryptography.
 - **Empreinte Matérielle (System Fingerprint)** : Génération d'une clé d'identification unique basée sur les composants du poste (UUID carte mère, processeur, adresse MAC).
-- **Licences Signées Cryptographiquement (RSA / AES-256)** : Vérification de la signature numérique de la licence en local sans nécessiter de connexion internet permanente.
+- **Licences Signées Cryptographiquement (Ed25519)** : Vérification de la signature numérique de la licence en local sans nécessiter de connexion internet permanente.
 - **Support des Licences Temporaires & Permanentes** : Gestion de la période de validité, du nombre maximal de postes autorisés et des fonctionnalités activées.
 
 ---
@@ -488,7 +488,7 @@ Les contributions au projet **Jelotia Imposer** sont strictly gérées selon les
    ```bash
    uv run ruff check .
    ```
-3. **Validation des Tests** : Tout ajout de code doit s'accompagner de tests unitaires ou d'intégration et maintenir une couverture ≥ 80%.
+3. **Validation des Tests** : Tout ajout de code doit s'accompagner de tests unitaires ou d'intégration et ne pas faire baisser la couverture mesurée en CI.
 4. **Signalement de Sécurité** : Pour signaler une vulnérabilité relative au serveur de licences ou à la gestion des données, contactez directement l'équipe technique à `security@jelotia.com`.
 
 ---
