@@ -1,0 +1,4 @@
+# Plafond de lignes > 100 colonnes (E501).
+# Il ne doit JAMAIS augmenter. Après avoir corrigé des lignes, abaissez-le :
+#   uv run python scripts/check_line_length.py --update
+91

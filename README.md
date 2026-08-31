@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/auceps-dev-team/JELOTIA-IMPOSER"><img src="https://img.shields.io/badge/version-1.44.0-blue.svg" alt="Version 1.44.0" /></a>
+  <a href="https://github.com/auceps-dev-team/JELOTIA-IMPOSER"><img src="https://img.shields.io/badge/version-1.45.0-blue.svg" alt="Version 1.45.0" /></a>
   <a href="https://github.com/auceps-dev-team/JELOTIA-IMPOSER/actions"><img src="https://img.shields.io/badge/build-passing-brightgreen.svg" alt="Build Status" /></a>
   <a href="#-documentation-des-tests--qa"><img src="https://img.shields.io/badge/coverage-mesur%C3%A9e%20en%20CI-informational.svg" alt="Couverture mesuree en CI" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Proprietary%20%2F%20Jelotia%20SARL-red.svg" alt="License" /></a>

@@ -36,6 +36,13 @@ jobs:
       - name: Ruff
         run: uv run ruff check . --output-format=github
 
+      - name: Line length must not regress
+        # E501 is not enforced repo-wide: 91 inherited lines exceed 100 columns
+        # and reformatting them costs 820-2557 lines of churn for a purely
+        # cosmetic rule. This ratchet freezes that count instead — the debt is
+        # tolerated but can no longer grow.
+        run: uv run python scripts/check_line_length.py
+
       - name: Versions must agree everywhere
         # pyproject / _version.py / installer / README. They drifted to four
         # different values because the bump script only wrote two of them.
